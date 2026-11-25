@@ -1,7 +1,9 @@
-// Dapur Kilat v14 — state & logika game.
+// Dapur Kilat v18 — state & logika game.
 // Alur: ambil bahan di meja -> olah di stasiun (talenan/kompor) atau
 // langsung ke piring (bahan 'siap') -> rakit di piring -> sajikan.
-// v14: bonus "SEMPURNA!" — saji dengan kesabaran >75% dapat +Rp 3.
+// v18: C2 Jam Sibuk RUSH! (order cepat + tip +2); C3 Menu Spesial (+Rp 2).
+// v17: 7 hidangan (Mie Goreng Spesial baru); bonus "SEMPURNA!" (v14)
+// dipertahankan; S1 Pesanan VIP (tiket emas, 2x harga dasar).
 // PENTING (pelajaran v12): s.prepared mencatat bahan yang sudah lewat
 // stasiun — hanya bahan 'siap' ATAU yang ada di s.prepared boleh ditaruh
 // di piring. Tanpa ini, bahan matang ditolak dari piring (bug v12).
@@ -17,7 +19,7 @@ export function createState(opts = {}) {
     combo: 0,
     strikes: 0,
     patience: RULES.patienceStart,
-    orders: [], // { dish, patience, max }
+    orders: [], // { dish, patience, max, vip, special }
     orderTimer: 0,
     hand: null, // id bahan di tangan
     plate: [], // id bahan yang sudah diolah, di piring
@@ -30,6 +32,12 @@ export function createState(opts = {}) {
     paused: false,
     orderQueue: opts.orderQueue ? [...opts.orderQueue] : null,
     orderIdx: 0,
+    // v18 C2: Jam Sibuk RUSH!
+    rushActive: false, // sedang RUSH?
+    rushTimer: 0, // hitung mundur durasi RUSH saat aktif
+    rushNext: RULES.rushEvery, // hitung mundur menuju RUSH berikutnya
+    // v18 C3: Menu Spesial Hari Ini (dipilih acak di startGame).
+    specialDish: null,
   };
   return s;
 }
@@ -44,10 +52,24 @@ function nextDish(s) {
   return keys[Math.floor(Math.random() * keys.length)];
 }
 
+// Harga yang tampil di tiket & dipakai sebagai dasar bayaran serve:
+// harga dasar, +2 bila order SPESIAL (v18 C3), digandakan bila VIP (v17 S1).
+// VIP spesial = (base + 2) * 2.
+export function orderPrice(order) {
+  const dish = DISHES[order.dish];
+  let p = dish.base;
+  if (order.special) p += RULES.specialBonus;
+  return p * (order.vip ? RULES.vipMultiplier : 1);
+}
+
 export function spawnOrder(s) {
   if (s.orders.length >= RULES.ordersMax) return false;
   const dish = nextDish(s);
-  s.orders.push({ dish, patience: s.patience, max: s.patience });
+  // v17 S1: 25% peluang jadi Pesanan VIP (tiket emas, bayar 2x).
+  const vip = Math.random() < RULES.vipChance;
+  // v18 C3: order spesial bila hidangannya = spesial hari ini.
+  const special = dish === s.specialDish;
+  s.orders.push({ dish, patience: s.patience, max: s.patience, vip, special });
   return true;
 }
 
@@ -70,6 +92,12 @@ export function startGame(s) {
   s.floatText = null;
   s.perfect = null;
   s.paused = false;
+  // v18 C2: reset Jam Sibuk. C3: pilih Menu Spesial Hari Ini (acak).
+  s.rushActive = false;
+  s.rushTimer = 0;
+  s.rushNext = RULES.rushEvery;
+  const keys = Object.keys(DISHES);
+  s.specialDish = keys[Math.floor(Math.random() * keys.length)];
   spawnOrder(s);
   spawnOrder(s);
   spawnOrder(s);
@@ -149,6 +177,8 @@ export function findMatchingOrder(s) {
 
 // Sajikan: orderIdx -1 = cari otomatis; >=0 = tiket tertentu.
 // v14: saji SEMPURNA bila kesabaran >75% — bonus +Rp 3 + teks "SEMPURNA!".
+// v17 S1: order VIP membayar 2x harga dasar (effectiveBase).
+// v18 C2: tip +2 saat RUSH aktif. C3: effectiveBase sudah termasuk +2 spesial.
 export function serve(s, orderIdx = -1) {
   if (s.screen !== 'main' || s.paused) return false;
   if (s.plate.length === 0) { setMessage(s, 'Piring kosong! Rakit hidangan dulu.'); return false; }
@@ -160,13 +190,15 @@ export function serve(s, orderIdx = -1) {
   }
   const order = s.orders[idx];
   const dish = DISHES[order.dish];
-  // Harga: base + tip kecepatan + bonus kombo + bonus SEMPURNA!
+  // Harga: effectiveBase (2x bila VIP, +2 bila SPESIAL) + tip kecepatan
+  // (+2 bila RUSH) + bonus kombo + bonus SEMPURNA!
+  const effectiveBase = orderPrice(order);
   const frac = Math.max(0, order.patience / order.max);
-  const tip = Math.round(RULES.tipMax * frac);
-  const comboBonus = Math.round(dish.base * Math.min(RULES.comboMax, s.combo * RULES.comboStep));
+  const tip = Math.round(RULES.tipMax * frac) + (s.rushActive ? RULES.rushTipBonus : 0);
+  const comboBonus = Math.round(effectiveBase * Math.min(RULES.comboMax, s.combo * RULES.comboStep));
   const isPerfect = frac > RULES.perfectThreshold;
   const perfectBonus = isPerfect ? RULES.perfectBonus : 0;
-  const total = dish.base + tip + comboBonus + perfectBonus;
+  const total = effectiveBase + tip + comboBonus + perfectBonus;
   s.coins += total;
   s.served += 1;
   s.combo += 1;
@@ -176,9 +208,11 @@ export function serve(s, orderIdx = -1) {
   s.plate = [];
   s.prepared = {};
   s.patience = Math.max(RULES.patienceMin, s.patience - RULES.patienceStep);
+  const vipPrefix = order.vip ? 'VIP! ' : '';
+  const rushPrefix = s.rushActive ? 'RUSH! ' : '';
   setMessage(s, isPerfect
-    ? 'SEMPURNA! ' + dish.label + ' disajikan! +Rp ' + total + '.'
-    : dish.label + ' disajikan! +Rp ' + total + '.');
+    ? 'SEMPURNA! ' + vipPrefix + rushPrefix + dish.label + ' disajikan! +Rp ' + total + '.'
+    : vipPrefix + rushPrefix + dish.label + ' disajikan! +Rp ' + total + '.');
   if (s.served >= RULES.servesToWin) {
     s.screen = 'win';
     setMessage(s, 'Hari selesai! Total Rp ' + s.coins + '.');
@@ -203,6 +237,23 @@ export function tick(s, dt) {
     s.perfect.t -= dt;
     if (s.perfect.t <= 0) s.perfect = null;
   }
+  // v18 C2: Jam Sibuk RUSH! — mesin waktu: hitung mundur menuju RUSH,
+  // lalu hitung mundur durasi RUSH, lalu kembali menunggu RUSH berikutnya.
+  if (s.rushActive) {
+    s.rushTimer -= dt;
+    if (s.rushTimer <= 0) {
+      s.rushActive = false;
+      s.rushNext = RULES.rushEvery;
+      setMessage(s, 'Jam sibuk selesai. Tarik napas, koki!');
+    }
+  } else {
+    s.rushNext -= dt;
+    if (s.rushNext <= 0) {
+      s.rushActive = true;
+      s.rushTimer = RULES.rushDuration;
+      setMessage(s, '⚡ RUSH! Pesanan datang lebih cepat, tip +Rp 2!');
+    }
+  }
   // Stasiun berjalan.
   for (const name of ['talenan', 'kompor']) {
     const st = s.stations[name];
@@ -224,10 +275,11 @@ export function tick(s, dt) {
       }
     }
   }
-  // Order baru 2,5 dtk setelah slot kosong.
+  // Order baru setelah slot kosong — lebih cepat saat RUSH (v18 C2).
   if (s.orders.length < RULES.ordersMax) {
     s.orderTimer += dt;
-    if (s.orderTimer >= RULES.orderGap) {
+    const gap = s.rushActive ? RULES.rushOrderGap : RULES.orderGap;
+    if (s.orderTimer >= gap) {
       s.orderTimer = 0;
       spawnOrder(s);
     }

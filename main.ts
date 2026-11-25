@@ -1,4 +1,4 @@
-// Dapur Kilat v14 — program utama (Node 22, stdlib saja).
+// Dapur Kilat v18 — program utama (Node 22, stdlib saja).
 // Menyalin game/ + screenshots/ ke /output lalu menulis dossier.json
 // via buildDossier(dir, caps) dari ./vendor/makefun-game.ts (salinan kit,
 // tak diubah). buildDossier membaca game/ + screenshots/ dari dir itu

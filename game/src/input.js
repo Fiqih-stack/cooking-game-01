@@ -1,9 +1,15 @@
-// Dapur Kilat v14 — input (mouse + keyboard).
-// Klik: bahan di meja, stasiun, piring, tombol SAJIKAN, tiket, tombol judul.
-// Tombol 1–6: pilih bahan. Spasi: sajikan. R: restart. P: jeda.
+// Dapur Kilat v18 — input (mouse + keyboard).
+// Klik: bahan di meja (18 kartu, 2 baris x 9), stasiun, piring,
+// tombol SAJIKAN, tiket, tombol judul.
+// Tombol 1-9: baris 1 counter. Tombol A,S,D,F,G,H,J,K,L: baris 2 counter.
+// Spasi: sajikan. R: restart. P: jeda.
+// v18: tidak ada perubahan input (counter tetap 18, 7 hidangan).
 
-import { COUNTER } from './config.js';
+import { COUNTER, counterCardRect } from './config.js';
 import { pickIngredient, placeOnPlate, serve, startGame, useStation } from './state.js';
+
+// Tombol baris 2 counter (berurutan dengan COUNTER[9..17]).
+const ROW2_KEYS = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'];
 
 export function setupInput(canvas, s, layout) {
   canvas.addEventListener('click', (e) => {
@@ -34,9 +40,17 @@ export function setupInput(canvas, s, layout) {
       serve(s, -1);
       return;
     }
+    // Baris 1 counter: tombol 1-9.
     const n = parseInt(k, 10);
-    if (n >= 1 && n <= 6) {
+    if (n >= 1 && n <= 9) {
       const id = COUNTER[n - 1];
+      if (id) pickIngredient(s, id);
+      return;
+    }
+    // Baris 2 counter: tombol A,S,D,F,G,H,J,K,L.
+    const row2 = ROW2_KEYS.indexOf(k);
+    if (row2 >= 0) {
+      const id = COUNTER[9 + row2];
       if (id) pickIngredient(s, id);
     }
   });
@@ -80,15 +94,10 @@ function handleClick(s, x, y, L) {
     };
     if (inside(x, y, t)) { serve(s, i); return; }
   }
-  // Kartu bahan di meja (6 kartu).
-  const cw = (L.kartu.w - (6 - 1) * L.kartu.gap) / 6;
-  for (let i = 0; i < 6; i++) {
-    const card = {
-      x: L.kartu.x + i * (cw + L.kartu.gap),
-      y: L.kartu.y,
-      w: cw,
-      h: L.kartu.h,
-    };
+  // Kartu bahan di meja (18 kartu, 2 baris x 9) — grid yang sama
+  // dengan render.js via counterCardRect (pelajaran v15).
+  for (let i = 0; i < COUNTER.length; i++) {
+    const card = counterCardRect(L, i);
     if (inside(x, y, card)) {
       pickIngredient(s, COUNTER[i]);
       return;
