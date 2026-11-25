@@ -1,6 +1,6 @@
-[![Play Dapur Kilat](https://img.shields.io/badge/Play-Dapur%20Kilat-58b368?style=for-the-badge)](https://make.fun/bounty/best-cooking-game-20261125-0137)
-[![make.fun](https://img.shields.io/badge/Built%20with-make.fun-ff6b35?style=for-the-badge)](https://make.fun)
-[![Try make.fun](https://img.shields.io/badge/Try-make.fun-7c3aed?style=for-the-badge)](https://make.fun/?ref=6sc35azz)
+[![make.fun · best-cooking-game-20261125-0137](https://make.fun/badge/best-cooking-game-20261125-0137.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
+[![rank](https://make.fun/badge/best-cooking-game-20261125-0137/Fiqih-stack/cooking-game-01/rank.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
+[![reward](https://make.fun/badge/best-cooking-game-20261125-0137/Fiqih-stack/cooking-game-01/reward.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
 
 # Dapur Kilat
 
@@ -31,4 +31,4 @@ Game masak 2D yang cepat dan menegangkan: ambil bahan, olah di talenan dan kompo
 
 Game berjalan offline di browser, tanpa aset luar — semua gambar digambar dengan kode canvas.
 
-Dibangun untuk bounty [Make the best cooking game](https://make.fun/bounty/best-cooking-game-20261125-0137) di make.fun.
+Dibangun untuk bounty [Make the best cooking game](https://make.fun/bounty/best-cooking-game-20261125-0137) di make.fun. Coba buat game kamu sendiri di [make.fun](https://make.fun/?ref=6sc35azz).
