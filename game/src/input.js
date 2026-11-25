@@ -1,128 +1,97 @@
-// Dapur Kilat v11 — input keyboard + mouse (tanpa logika game).
-// Klik: kartu bahan -> ambil; stasiun -> olah/ambil hasil; piring -> taruh;
-// tombol SAJIKAN / tiket -> sajikan; tombol judul -> mulai; kartu akhir -> main lagi.
-// Tombol: 1-6 pilih bahan, Spasi sajikan, R ulangi, P jeda.
-// Tab disembunyikan -> auto-pause.
-import { LAYOUT } from './config.js';
-import {
-  pickIngredient, useStation, placeOnPlate, serve,
-  startDay, restartDay, togglePause,
-} from './state.js';
+// Dapur Kilat v12 — input (mouse + keyboard).
+// Klik: bahan di meja, stasiun, piring, tombol SAJIKAN, tiket, tombol judul.
+// Tombol 1–6: pilih bahan. Spasi: sajikan. R: restart. P: jeda.
 
-export function pointInRect(x, y, r) {
-  return x >= r.x && x < r.x + r.w && y >= r.y && y < r.y + r.h;
+import { COUNTER } from './config.js';
+import { pickIngredient, placeOnPlate, serve, startGame, useStation } from './state.js';
+
+export function setupInput(canvas, s, layout) {
+  canvas.addEventListener('click', (e) => {
+    const r = canvas.getBoundingClientRect();
+    const x = (e.clientX - r.left) * (canvas.width / r.width);
+    const y = (e.clientY - r.top) * (canvas.height / r.height);
+    handleClick(s, x, y, layout);
+  });
+
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    const k = e.key.toLowerCase();
+    if (k === 'p') {
+      if (s.screen === 'main') s.paused = !s.paused;
+      return;
+    }
+    if (k === 'r') {
+      if (s.screen !== 'title') startGame(s);
+      return;
+    }
+    if (s.screen === 'title') {
+      if (k === 'enter' || k === ' ') startGame(s);
+      return;
+    }
+    if (s.screen !== 'main' || s.paused) return;
+    if (k === ' ') {
+      e.preventDefault();
+      serve(s, -1);
+      return;
+    }
+    const n = parseInt(k, 10);
+    if (n >= 1 && n <= 6) {
+      const id = COUNTER[n - 1];
+      if (id) pickIngredient(s, id);
+    }
+  });
+
+  // Auto-pause saat tab disembunyikan.
+  document.addEventListener('visibilitychange', () => {
+    if (document.hidden && s.screen === 'main' && !s.paused) s.paused = true;
+  });
 }
 
-// Rect kartu bahan ke-i (6 kartu dalam LAYOUT.kartu).
-export function cardRectAt(i) {
-  const k = LAYOUT.kartu;
-  const w = (k.w - (6 - 1) * k.gap) / 6;
-  return { x: k.x + i * (w + k.gap), y: k.y, w, h: k.h };
+function inside(x, y, box) {
+  return x >= box.x && x <= box.x + box.w && y >= box.y && y <= box.y + box.h;
 }
 
-// Rect tiket ke-i (3 tiket dalam LAYOUT.papan).
-export function ticketRectAt(i) {
-  const t = LAYOUT.tiket;
-  return { x: t.x, y: t.y + i * (t.h + t.gap), w: t.w, h: t.h };
-}
-
-// Arahkan satu klik (koordinat canvas 1280x720) ke aksi state.
-export function handleClick(s, x, y) {
+function handleClick(s, x, y, L) {
   if (s.screen === 'title') {
-    if (pointInRect(x, y, LAYOUT.tombolJudul)) startDay(s);
+    if (inside(x, y, L.tombolJudul)) startGame(s);
     return;
   }
   if (s.screen === 'win' || s.screen === 'over') {
-    if (pointInRect(x, y, LAYOUT.kartuAkhir)) restartDay(s);
-    return;
-  }
-  if (s.screen !== 'main') return;
-  // Tombol SAJIKAN.
-  if (pointInRect(x, y, LAYOUT.sajikan)) {
-    serve(s, -1);
-    return;
-  }
-  // Stasiun talenan / kompor.
-  if (pointInRect(x, y, LAYOUT.talenan)) {
-    useStation(s, 'talenan');
-    return;
-  }
-  if (pointInRect(x, y, LAYOUT.kompor)) {
-    useStation(s, 'kompor');
-    return;
-  }
-  // Piring (taruh bahan dari tangan).
-  if (pointInRect(x, y, LAYOUT.piring)) {
-    placeOnPlate(s);
-    return;
-  }
-  // Tiket pesanan (sajikan ke slot itu bila piring cocok).
-  for (let i = 0; i < 3; i++) {
-    if (pointInRect(x, y, ticketRectAt(i))) {
-      serve(s, i);
-      return;
-    }
-  }
-  // Kartu bahan di meja.
-  for (let i = 0; i < 6; i++) {
-    if (pointInRect(x, y, cardRectAt(i))) {
-      const id = s.counter[i];
-      if (id) pickIngredient(s, id);
-      return;
-    }
-  }
-}
-
-// Arahkan satu tombol keyboard ke aksi state.
-export function handleKey(s, key) {
-  if (key === 'p' || key === 'P') {
-    togglePause(s);
-    return;
-  }
-  if (key === 'r' || key === 'R') {
-    if (s.screen === 'main' || s.screen === 'win' || s.screen === 'over') restartDay(s);
+    // Klik kartu akhir = main lagi.
+    if (inside(x, y, L.kartuAkhir)) startGame(s);
     return;
   }
   if (s.screen !== 'main' || s.paused) return;
-  if (key === ' ') {
-    serve(s, -1);
-    return;
-  }
-  const n = parseInt(key, 10);
-  if (n >= 1 && n <= 6) {
-    const id = s.counter[n - 1];
-    if (id) pickIngredient(s, id);
-  }
-}
 
-// Pasang listener DOM ke canvas; kembalikan objek mouse (untuk badge tangan).
-export function attachInput(canvas, s) {
-  const mouse = { x: 0, y: 0, inside: false };
-  function toGame(e) {
-    const r = canvas.getBoundingClientRect();
-    return {
-      x: (e.clientX - r.left) * (1280 / r.width),
-      y: (e.clientY - r.top) * (720 / r.height),
+  // Tombol SAJIKAN.
+  if (inside(x, y, L.sajikan)) { serve(s, -1); return; }
+  // Stasiun.
+  if (inside(x, y, L.talenan)) { useStation(s, 'talenan'); return; }
+  if (inside(x, y, L.kompor)) { useStation(s, 'kompor'); return; }
+  // Piring.
+  if (inside(x, y, L.piring)) { placeOnPlate(s); return; }
+  // Tiket pesanan (klik = sajikan tiket itu).
+  for (let i = 0; i < s.orders.length; i++) {
+    const t = {
+      x: L.tiket.x,
+      y: L.tiket.y + i * (L.tiket.h + L.tiket.gap),
+      w: L.tiket.w,
+      h: L.tiket.h,
     };
+    if (inside(x, y, t)) { serve(s, i); return; }
   }
-  canvas.addEventListener('mousemove', (e) => {
-    const p = toGame(e);
-    mouse.x = p.x;
-    mouse.y = p.y;
-    mouse.inside = true;
-  });
-  canvas.addEventListener('mouseleave', () => { mouse.inside = false; });
-  canvas.addEventListener('click', (e) => {
-    const p = toGame(e);
-    handleClick(s, p.x, p.y);
-  });
-  window.addEventListener('keydown', (e) => {
-    if (e.key === ' ') e.preventDefault();
-    handleKey(s, e.key);
-  });
-  // Auto-pause saat tab disembunyikan.
-  document.addEventListener('visibilitychange', () => {
-    if (document.hidden && s.screen === 'main' && !s.paused) togglePause(s);
-  });
-  return { mouse };
+  // Kartu bahan di meja (6 kartu).
+  const cw = (L.kartu.w - (6 - 1) * L.kartu.gap) / 6;
+  for (let i = 0; i < 6; i++) {
+    const card = {
+      x: L.kartu.x + i * (cw + L.kartu.gap),
+      y: L.kartu.y,
+      w: cw,
+      h: L.kartu.h,
+    };
+    if (inside(x, y, card)) {
+      pickIngredient(s, COUNTER[i]);
+      return;
+    }
+  }
 }

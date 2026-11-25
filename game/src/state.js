@@ -1,248 +1,222 @@
-// Dapur Kilat v11 — logika game (tanpa DOM).
-// Alur: ambil bahan -> olah di stasiun -> taruh di piring -> sajikan.
-// Menu dibaca dari config.js, jadi logika ini tidak terikat pada hidangan tertentu.
-import { DISHES, DISH_IDS, ECONOMY, INGREDIENTS, PANTRY } from './config.js';
+// Dapur Kilat v12 — state & logika game.
+// Alur: ambil bahan di meja -> olah di stasiun (talenan/kompor) atau
+// langsung ke piring (bahan 'siap') -> rakit di piring -> sajikan.
+// v12: logika SAMA dengan v11; hanya visual nasgor + spaghetti yang berubah.
 
-// Kesabaran pesanan: 45 dtk awal, -1,5 dtk per pesanan tersaji, min 25 dtk.
-export function patienceFor(served) {
-  return Math.max(
-    ECONOMY.patienceMin,
-    ECONOMY.patienceStart - served * ECONOMY.patienceStep,
-  );
-}
+import { DISHES, INGREDIENTS, RULES, STATIONS } from './config.js';
 
 export function createState(opts = {}) {
-  return {
-    screen: 'title',
-    paused: false,
+  const s = {
+    screen: 'title', // 'title' | 'main' | 'win' | 'over'
+    time: 0,
     coins: 0,
     served: 0,
-    strikes: 0,
     combo: 0,
-    elapsed: 0,
-    orders: [null, null, null],
-    spawnTimers: [0, 0, 0],
-    counter: [],
-    stations: { talenan: null, kompor: null },
-    plate: [],
-    hand: null,
+    strikes: 0,
+    patience: RULES.patienceStart,
+    orders: [], // { dish, patience, max }
+    orderTimer: 0,
+    hand: null, // id bahan di tangan
+    plate: [], // id bahan yang sudah diolah, di piring
+    prepared: {}, // id bahan yang sudah lewat stasiun & siap ditaruh (true)
+    stations: { talenan: null, kompor: null }, // { item, t, total } | null
     message: '',
-    floats: [],
+    messageT: 0,
+    floatText: null, // { text, t }
+    paused: false,
     orderQueue: opts.orderQueue ? [...opts.orderQueue] : null,
+    orderIdx: 0,
   };
+  return s;
 }
 
-// Pilih hidangan berikutnya: dari antrean (untuk tes/shot) atau acak.
 function nextDish(s) {
-  if (s.orderQueue && s.orderQueue.length > 0) return s.orderQueue.shift();
-  return DISH_IDS[Math.floor(Math.random() * DISH_IDS.length)];
+  if (s.orderQueue) {
+    const d = s.orderQueue[s.orderIdx % s.orderQueue.length];
+    s.orderIdx++;
+    return d;
+  }
+  const keys = Object.keys(DISHES);
+  return keys[Math.floor(Math.random() * keys.length)];
 }
 
-export function spawnOrder(s, slot) {
+export function spawnOrder(s) {
+  if (s.orders.length >= RULES.ordersMax) return false;
   const dish = nextDish(s);
-  s.orders[slot] = {
-    dish,
-    patience: patienceFor(s.served),
-    maxPatience: patienceFor(s.served),
-  };
+  s.orders.push({ dish, patience: s.patience, max: s.patience });
+  return true;
 }
 
-// Meja: bahan pesanan aktif (paling mendesak dulu) + pantry sampai 6 kartu.
-export function refreshCounter(s) {
-  const need = [];
-  const ordered = [...s.orders]
-    .filter(Boolean)
-    .sort((a, b) => a.patience - b.patience);
-  for (const o of ordered) {
-    for (const id of DISHES[o.dish].ingredients) {
-      if (!need.includes(id) && !s.plate.includes(id)) need.push(id);
-    }
-  }
-  for (const id of PANTRY) {
-    if (need.length >= 6) break;
-    if (!need.includes(id)) need.push(id);
-  }
-  s.counter = need.slice(0, 6);
-}
-
-export function startDay(s) {
+export function startGame(s) {
   s.screen = 'main';
-  s.paused = false;
+  s.time = 0;
   s.coins = 0;
   s.served = 0;
-  s.strikes = 0;
   s.combo = 0;
-  s.elapsed = 0;
-  s.orders = [null, null, null];
-  s.spawnTimers = [0, 0, 0];
-  s.stations = { talenan: null, kompor: null };
+  s.strikes = 0;
+  s.patience = RULES.patienceStart;
+  s.orders = [];
+  s.orderTimer = 0;
+  s.hand = null;
   s.plate = [];
-  s.hand = null;
-  s.floats = [];
-  s.message = 'Hari dimulai — sajikan 12 pesanan!';
-  for (let i = 0; i < 3; i++) spawnOrder(s, i);
-  refreshCounter(s);
+  s.prepared = {};
+  s.stations = { talenan: null, kompor: null };
+  s.message = 'Selamat pagi! Sajikan 12 pesanan hari ini.';
+  s.messageT = 3;
+  s.floatText = null;
+  s.paused = false;
+  spawnOrder(s);
+  spawnOrder(s);
+  spawnOrder(s);
 }
 
-export function restartDay(s) {
-  startDay(s);
-}
-
-export function togglePause(s) {
-  if (s.screen !== 'main') return;
-  s.paused = !s.paused;
-  s.message = s.paused ? 'Jeda — tekan P untuk lanjut.' : '';
-}
-
-// Ambil bahan dari meja ke tangan.
+// Ambil bahan dari meja. Tolak bila tangan penuh, bahan tidak dikenal,
+// atau bahan sudah ada di piring (soft-lock fix).
 export function pickIngredient(s, id) {
-  if (s.screen !== 'main' || s.paused) return { ok: false, msg: 'Tidak bisa mengambil sekarang.' };
-  if (!INGREDIENTS[id]) return { ok: false, msg: 'Bahan tidak dikenal.' };
-  if (s.hand) return { ok: false, msg: 'Tangan sudah penuh.' };
-  // Perbaikan soft-lock v6/v7/v8/v9/v10: bahan yang sudah ada di piring tidak bisa diambil lagi.
-  if (s.plate.includes(id)) return { ok: false, msg: 'Bahan sudah ada di piring.' };
-  const idx = s.counter.indexOf(id);
-  if (idx < 0) return { ok: false, msg: 'Bahan tidak ada di meja.' };
-  s.counter.splice(idx, 1);
-  const ing = INGREDIENTS[id];
-  s.hand = { id, processed: ing.station === 'siap' };
-  s.message = ing.station === 'siap'
-    ? `${ing.name} siap dipakai — taruh di piring.`
-    : `${ing.name} di tangan — olah di ${ing.station === 'talenan' ? 'talenan' : 'kompor'}.`;
-  return { ok: true };
+  if (s.screen !== 'main' || s.paused) return false;
+  if (s.hand) { setMessage(s, 'Tangan penuh! Taruh dulu bahan yang dipegang.'); return false; }
+  if (!INGREDIENTS[id]) { setMessage(s, 'Bahan tidak dikenal.'); return false; }
+  if (s.plate.includes(id)) { setMessage(s, 'Bahan itu sudah ada di piring.'); return false; }
+  s.hand = id;
+  return true;
 }
 
-// Pakai stasiun: mulai olah (tangan berisi bahan mentah) atau ambil hasil olahan.
-export function useStation(s, station) {
-  if (s.screen !== 'main' || s.paused) return { ok: false, msg: 'Tidak bisa memakai stasiun sekarang.' };
-  if (station !== 'talenan' && station !== 'kompor') return { ok: false, msg: 'Stasiun tidak dikenal.' };
-  const st = s.stations[station];
-  // Ambil hasil olahan yang sudah selesai.
-  if (!s.hand) {
-    if (!st) return { ok: false, msg: 'Stasiun kosong.' };
-    if (st.t < st.total) return { ok: false, msg: 'Masih diolah — tunggu sebentar.' };
-    // Perbaikan soft-lock: hasil olahan yang sudah ada di piring tidak bisa diambil.
-    if (s.plate.includes(st.item)) return { ok: false, msg: 'Bahan sudah ada di piring.' };
-    s.hand = { id: st.item, processed: true };
-    s.stations[station] = null;
-    s.message = `${INGREDIENTS[st.item].name} sudah diolah — taruh di piring.`;
-    return { ok: true };
+// Pakai stasiun: mulai olah (bila kosong & tangan pegang bahan mentah),
+// atau ambil hasil (bila selesai). Bahan 'siap' tidak bisa masuk stasiun.
+export function useStation(s, name) {
+  if (s.screen !== 'main' || s.paused) return false;
+  const st = s.stations[name];
+  if (st) {
+    // Ambil hasil bila selesai.
+    if (st.t >= st.total) {
+      if (s.hand) { setMessage(s, 'Tangan penuh!'); return false; }
+      s.hand = st.item;
+      s.prepared[st.item] = true; // sudah diolah, boleh ditaruh di piring
+      s.stations[name] = null;
+      return true;
+    }
+    setMessage(s, 'Masih diolah, tunggu sebentar…');
+    return false;
   }
-  // Mulai olah bahan mentah di tangan.
-  const ing = INGREDIENTS[s.hand.id];
-  if (s.hand.processed) return { ok: false, msg: 'Bahan sudah siap — taruh di piring.' };
-  if (ing.station !== station) {
-    return { ok: false, msg: `${ing.name} diolah di ${ing.station === 'talenan' ? 'talenan' : 'kompor'}, bukan ${station}.` };
+  // Mulai olah.
+  if (!s.hand) { setMessage(s, 'Ambil bahan dulu dari meja.'); return false; }
+  const ing = INGREDIENTS[s.hand];
+  if (!ing) return false;
+  if (ing.station === 'siap') { setMessage(s, ing.label + ' sudah siap, langsung taruh di piring.'); return false; }
+  if (ing.station !== name) {
+    setMessage(s, ing.label + ' diolah di ' + STATIONS[ing.station].name + ', bukan di ' + STATIONS[name].name + '.');
+    return false;
   }
-  if (st) return { ok: false, msg: 'Stasiun sedang dipakai.' };
-  const total = station === 'talenan' ? ECONOMY.chopTime : ECONOMY.cookTime;
-  s.stations[station] = { item: s.hand.id, t: 0, total };
+  s.stations[name] = { item: s.hand, t: 0, total: STATIONS[name].time };
   s.hand = null;
-  s.message = `${ing.name} sedang diolah di ${station}…`;
-  return { ok: true };
+  return true;
 }
 
-// Taruh bahan olahan dari tangan ke piring.
+// Taruh bahan yang dipegang ke piring. Hanya bahan yang sudah diolah
+// (atau 'siap') yang boleh ditaruh; bahan mentah ditolak.
 export function placeOnPlate(s) {
-  if (s.screen !== 'main' || s.paused) return { ok: false, msg: 'Tidak bisa menaruh sekarang.' };
-  if (!s.hand) return { ok: false, msg: 'Tangan kosong.' };
-  if (!s.hand.processed) return { ok: false, msg: 'Bahan mentah — olah dulu sebelum ditaruh.' };
-  if (s.plate.includes(s.hand.id)) return { ok: false, msg: 'Bahan sudah ada di piring.' };
-  s.plate.push(s.hand.id);
-  const name = INGREDIENTS[s.hand.id].name;
+  if (s.screen !== 'main' || s.paused) return false;
+  if (!s.hand) { setMessage(s, 'Tidak ada bahan di tangan.'); return false; }
+  const ing = INGREDIENTS[s.hand];
+  if (!ing) return false;
+  // Bahan mentah (butuh stasiun, belum diolah) tidak boleh langsung ke piring.
+  // Boleh ditaruh bila 'siap' ATAU sudah lewat stasiun (ada di s.prepared).
+  if (ing.station !== 'siap' && !s.prepared[s.hand]) {
+    setMessage(s, ing.label + ' mentah! Olah dulu di ' + STATIONS[ing.station].name + '.');
+    return false;
+  }
+  if (s.plate.includes(s.hand)) { setMessage(s, 'Bahan itu sudah ada di piring.'); return false; }
+  delete s.prepared[s.hand];
+  s.plate.push(s.hand);
   s.hand = null;
-  s.message = `${name} sudah di piring.`;
-  return { ok: true };
+  return true;
 }
 
-function dishForPlate(plate) {
-  for (const id of DISH_IDS) {
-    const need = DISHES[id].ingredients;
-    if (need.length === plate.length && need.every((x) => plate.includes(x))) return id;
+// Cari order yang cocok dengan isi piring (semua bahan hidangan ada).
+export function findMatchingOrder(s) {
+  for (let i = 0; i < s.orders.length; i++) {
+    const dish = DISHES[s.orders[i].dish];
+    if (dish.ingredients.length !== s.plate.length) continue;
+    if (dish.ingredients.every((id) => s.plate.includes(id))) return i;
   }
-  return null;
+  return -1;
 }
 
-// Hidangan yang cocok dengan isi piring saat ini (null bila belum lengkap).
-export function plateDish(s) {
-  return dishForPlate(s.plate);
-}
-
-// Sajikan piring ke pesanan yang cocok (atau slot tertentu).
-export function serve(s, slot = -1) {
-  if (s.screen !== 'main' || s.paused) return { ok: false, msg: 'Tidak bisa menyajikan sekarang.' };
-  const dish = dishForPlate(s.plate);
-  if (!dish) return { ok: false, msg: 'Piring belum lengkap.' };
-  let target = slot;
-  if (target < 0) {
-    target = s.orders.findIndex((o) => o && o.dish === dish);
+// Sajikan: orderIdx -1 = cari otomatis; >=0 = tiket tertentu.
+export function serve(s, orderIdx = -1) {
+  if (s.screen !== 'main' || s.paused) return false;
+  if (s.plate.length === 0) { setMessage(s, 'Piring kosong! Rakit hidangan dulu.'); return false; }
+  let idx = orderIdx;
+  if (idx < 0) idx = findMatchingOrder(s);
+  if (idx < 0 || idx >= s.orders.length) {
+    setMessage(s, 'Tidak ada pesanan yang cocok dengan isi piring.');
+    return false;
   }
-  if (target < 0 || !s.orders[target] || s.orders[target].dish !== dish) {
-    return { ok: false, msg: 'Tidak ada pesanan yang cocok.' };
-  }
-  const order = s.orders[target];
-  const base = DISHES[dish].base;
-  const speedBonus = Math.max(0, Math.min(ECONOMY.tipMax, Math.floor(order.patience / 8)));
-  const comboBonus = Math.round(base * Math.min(ECONOMY.comboMax, s.combo * ECONOMY.comboStep));
-  const price = base + speedBonus + comboBonus;
-  s.coins += price;
+  const order = s.orders[idx];
+  const dish = DISHES[order.dish];
+  // Harga: base + tip kecepatan + bonus kombo.
+  const frac = Math.max(0, order.patience / order.max);
+  const tip = Math.round(RULES.tipMax * frac);
+  const comboBonus = Math.round(dish.base * Math.min(RULES.comboMax, s.combo * RULES.comboStep));
+  const total = dish.base + tip + comboBonus;
+  s.coins += total;
   s.served += 1;
   s.combo += 1;
-  s.orders[target] = null;
-  s.spawnTimers[target] = ECONOMY.orderDelay;
+  s.floatText = { text: '+Rp ' + total, t: 1.2 };
+  s.orders.splice(idx, 1);
   s.plate = [];
-  s.floats.push({ text: `+Rp ${price}`, x: 752, y: 150, t: 0 });
-  s.message = `${DISHES[dish].name} tersaji! +Rp ${price}`;
-  refreshCounter(s);
-  if (s.served >= ECONOMY.servesToWin) {
+  s.prepared = {};
+  s.patience = Math.max(RULES.patienceMin, s.patience - RULES.patienceStep);
+  setMessage(s, dish.label + ' disajikan! +Rp ' + total + '.');
+  if (s.served >= RULES.servesToWin) {
     s.screen = 'win';
-    s.message = 'Hari selesai — semua pesanan tersaji!';
+    setMessage(s, 'Hari selesai! Total Rp ' + s.coins + '.');
   }
-  return { ok: true, price };
+  return true;
 }
 
-// Majukan waktu: olahan di stasiun, pesanan baru, kesabaran, float.
+export function setMessage(s, text) {
+  s.message = text;
+  s.messageT = 3;
+}
+
 export function tick(s, dt) {
   if (s.screen !== 'main' || s.paused) return;
-  if (!(dt > 0)) return;
-  s.elapsed += dt;
-  // Stasiun mengolah.
-  for (const key of ['talenan', 'kompor']) {
-    const st = s.stations[key];
+  s.time += dt;
+  if (s.messageT > 0) s.messageT -= dt;
+  if (s.floatText) {
+    s.floatText.t -= dt;
+    if (s.floatText.t <= 0) s.floatText = null;
+  }
+  // Stasiun berjalan.
+  for (const name of ['talenan', 'kompor']) {
+    const st = s.stations[name];
     if (st && st.t < st.total) st.t = Math.min(st.total, st.t + dt);
   }
-  // Pesanan baru setelah slot kosong.
-  for (let i = 0; i < 3; i++) {
-    if (!s.orders[i] && s.spawnTimers[i] > 0) {
-      s.spawnTimers[i] -= dt;
-      if (s.spawnTimers[i] <= 0) {
-        spawnOrder(s, i);
-        refreshCounter(s);
-      }
-    }
-  }
-  // Kesabaran pesanan berkurang; hangus = strike.
-  for (let i = 0; i < 3; i++) {
-    const o = s.orders[i];
-    if (!o) continue;
-    o.patience -= dt;
-    if (o.patience <= 0) {
-      s.orders[i] = null;
-      s.spawnTimers[i] = ECONOMY.orderDelay;
+  // Kesabaran order berkurang; hangus -> strike.
+  for (let i = s.orders.length - 1; i >= 0; i--) {
+    s.orders[i].patience -= dt;
+    if (s.orders[i].patience <= 0) {
+      const dish = DISHES[s.orders[i].dish];
+      s.orders.splice(i, 1);
       s.strikes += 1;
       s.combo = 0;
-      s.message = `Pesanan ${DISHES[o.dish].name} hangus! (${s.strikes}/${ECONOMY.strikesMax})`;
-      refreshCounter(s);
-      if (s.strikes >= ECONOMY.strikesMax) {
+      setMessage(s, dish.label + ' hangus! Strike ' + s.strikes + '/' + RULES.strikesMax + '.');
+      if (s.strikes >= RULES.strikesMax) {
         s.screen = 'over';
-        s.message = 'Shift berakhir — terlalu banyak pesanan hangus.';
+        setMessage(s, 'Shift berakhir. Total Rp ' + s.coins + '.');
+        return;
       }
     }
   }
-  // Float "+Rp" melayang lalu hilang.
-  s.floats = s.floats.filter((f) => {
-    f.t += dt;
-    f.y -= 28 * dt;
-    return f.t < 1.2;
-  });
+  // Order baru 2,5 dtk setelah slot kosong.
+  if (s.orders.length < RULES.ordersMax) {
+    s.orderTimer += dt;
+    if (s.orderTimer >= RULES.orderGap) {
+      s.orderTimer = 0;
+      spawnOrder(s);
+    }
+  } else {
+    s.orderTimer = 0;
+  }
 }

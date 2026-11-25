@@ -1,39 +1,41 @@
-// Dapur Kilat v11 — server lokal untuk render screenshot.
-// `/` redirect 302 ke `/game/index.html` dengan query dipertahankan,
-// supaya path relatif `./src/main.js` tidak 404 (bug serve.ts v7/v8).
-import { createServer } from 'node:http';
-import { readFileSync, existsSync } from 'node:fs';
-import { join, extname } from 'node:path';
-import { fileURLToPath } from 'node:url';
+// Dapur Kilat v12 — server lokal untuk render screenshot.
+// Melayani game/ sebagai file statis; '/' dialihkan (302) ke
+// /game/index.html dengan query dipertahankan (agar ?shot=... jalan).
 
-const root = join(fileURLToPath(new URL('.', import.meta.url)), 'game');
-const types = {
+import { createServer } from 'node:http';
+import { readFile } from 'node:fs/promises';
+import { extname, join } from 'node:path';
+
+const ROOT = process.cwd();
+const MIME = {
   '.html': 'text/html',
   '.js': 'text/javascript',
-  '.css': 'text/css',
-  '.png': 'image/png',
+  '.ts': 'text/javascript',
   '.jpg': 'image/jpeg',
+  '.jpeg': 'image/jpeg',
+  '.png': 'image/png',
+  '.json': 'application/json',
 };
 
-const server = createServer((req, res) => {
-  const url = new URL(req.url ?? '/', 'http://localhost:8080');
-  if (url.pathname === '/') {
-    res.writeHead(302, { Location: `/game/index.html${url.search}` });
+const server = createServer(async (req, res) => {
+  const url = new URL(req.url, 'http://localhost:8080');
+  let path = url.pathname;
+  if (path === '/') {
+    res.writeHead(302, { Location: '/game/index.html' + url.search });
     res.end();
     return;
   }
-  let path = url.pathname;
-  if (path.startsWith('/game/')) path = path.slice('/game/'.length);
-  const file = join(root, path);
-  if (!existsSync(file)) {
+  const file = join(ROOT, path);
+  try {
+    const buf = await readFile(file);
+    res.writeHead(200, { 'Content-Type': MIME[extname(file)] || 'application/octet-stream' });
+    res.end(buf);
+  } catch {
     res.writeHead(404);
     res.end('not found');
-    return;
   }
-  res.writeHead(200, { 'Content-Type': types[extname(file)] ?? 'application/octet-stream' });
-  res.end(readFileSync(file));
 });
 
 server.listen(8080, () => {
-  console.log('Dapur Kilat di http://localhost:8080/ (redirect ke /game/index.html)');
+  console.log('Dapur Kilat di http://localhost:8080/');
 });

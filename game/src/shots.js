@@ -1,85 +1,71 @@
-// Dapur Kilat v11 — preset screenshot (?shot=start|play|serve|end).
-// Setiap preset membangun satu state beku yang sama di setiap render,
-// supaya screenshot deterministik dan mewakili permainan nyata.
-import { startDay } from './state.js';
+// Dapur Kilat v12 — preset screenshot untuk dossier.
+// ?shot=start|play|serve|end — tiap preset menyusun state yang menampilkan
+// adegan berbeda: judul, bermain, piring siap saji, dan akhir hari.
 
-function setOrder(s, slot, dish, patience) {
-  s.orders[slot] = { dish, patience, maxPatience: 45 };
+import { DISHES } from './config.js';
+import { spawnOrder, startGame } from './state.js';
+
+const SHOTS = {
+  // Layar judul: hero 4 hidangan.
+  start(s) {
+    s.screen = 'title';
+  },
+  // Tengah permainan: koin 45, saji 4/12, kombo x2, waktu 20, 3 order,
+  // kedua stasiun sibuk, piring 2 bahan, tangan pegang kecap.
+  play(s) {
+    startGame(s);
+    s.coins = 45;
+    s.served = 4;
+    s.combo = 2;
+    s.time = 20;
+    s.orders = [
+      { dish: 'nasgor', patience: 30, max: 45 },
+      { dish: 'spaghetti', patience: 22, max: 45 },
+      { dish: 'burger', patience: 38, max: 45 },
+    ];
+    s.stations.talenan = { item: 'udang', t: 1.2, total: 2.0 };
+    s.stations.kompor = { item: 'nasi', t: 2.0, total: 3.2 };
+    s.plate = ['nasi', 'telur'];
+    s.hand = 'kecap';
+    s.message = 'Nasi Goreng hampir jadi — sajikan sebelum hangus!';
+    s.messageT = 10;
+  },
+  // Piring lengkap siap saji: koin 80, saji 7/12, kombo x3, waktu 34,
+  // float '+Rp 24'.
+  serve(s) {
+    startGame(s);
+    s.coins = 80;
+    s.served = 7;
+    s.combo = 3;
+    s.time = 34;
+    s.orders = [
+      { dish: 'spaghetti', patience: 28, max: 45 },
+      { dish: 'burger', patience: 35, max: 45 },
+      { dish: 'esteh', patience: 40, max: 45 },
+    ];
+    s.plate = ['spaghetti', 'daging', 'saus', 'keju'];
+    s.floatText = { text: '+Rp 24', t: 1.2 };
+    s.message = 'Spaghetti Bolognese siap! Sajikan sekarang.';
+    s.messageT = 10;
+  },
+  // Akhir hari: koin 210, saji 12/12, kombo x5, waktu 514, 1 strike.
+  end(s) {
+    startGame(s);
+    s.coins = 210;
+    s.served = 12;
+    s.combo = 5;
+    s.time = 514;
+    s.strikes = 1;
+    s.screen = 'win';
+    s.message = 'Hari selesai! Total Rp 210.';
+    s.messageT = 10;
+  },
+};
+
+export function hasShot(name) {
+  return Object.prototype.hasOwnProperty.call(SHOTS, name);
 }
 
-// start: layar judul (state baru, screen 'title').
-function shotStart(s) {
-  return s;
-}
-
-// play: tengah main — koin 45, tersaji 4/12, kombo x2, waktu 20,
-// 3 pesanan (Nasi Goreng, Spaghetti Bolognese, Burger),
-// kedua stasiun sibuk (udang di talenan, spaghetti di kompor),
-// piring 2 bahan Nasi Goreng (nasi + telur), tangan pegang kecap.
-function shotPlay(s) {
-  startDay(s);
-  s.coins = 45;
-  s.served = 4;
-  s.combo = 2;
-  s.elapsed = 20;
-  setOrder(s, 0, 'nasgor', 30);
-  setOrder(s, 1, 'spaghetti', 18);
-  setOrder(s, 2, 'burger', 38);
-  s.stations.talenan = { item: 'udang', t: 1.0, total: 2.0 };
-  s.stations.kompor = { item: 'spaghetti', t: 1.6, total: 3.2 };
-  s.plate = ['nasi', 'telur'];
-  s.hand = { id: 'kecap', processed: true };
-  s.counter = ['daging', 'saus', 'keju', 'roti', 'patty', 'selada'];
-  s.message = 'Nasi Goreng hampir jadi — tambah kecap!';
-  return s;
-}
-
-// serve: piring Nasi Goreng lengkap siap disajikan — koin 80,
-// tersaji 7/12, kombo x3, waktu 34, float '+Rp 24'.
-function shotServe(s) {
-  startDay(s);
-  s.coins = 80;
-  s.served = 7;
-  s.combo = 3;
-  s.elapsed = 34;
-  setOrder(s, 0, 'nasgor', 45);
-  setOrder(s, 1, 'esteh', 32);
-  setOrder(s, 2, 'burger', 12);
-  s.stations.talenan = null;
-  s.stations.kompor = null;
-  s.plate = ['nasi', 'telur', 'kecap', 'udang'];
-  s.hand = null;
-  s.counter = ['roti', 'patty', 'keju', 'selada', 'teh', 'es'];
-  s.floats = [{ text: '+Rp 24', x: 752, y: 150, t: 0 }];
-  s.message = 'Nasi Goreng siap disajikan!';
-  return s;
-}
-
-// end: hari selesai — koin 210, tersaji 12/12, kombo x5,
-// waktu 514, 1 strike, layar 'win'.
-function shotEnd(s) {
-  startDay(s);
-  s.coins = 210;
-  s.served = 12;
-  s.combo = 5;
-  s.elapsed = 514;
-  s.strikes = 1;
-  s.screen = 'win';
-  setOrder(s, 0, 'spaghetti', 27);
-  setOrder(s, 1, 'spaghetti', 27);
-  setOrder(s, 2, 'burger', 27);
-  s.stations.talenan = null;
-  s.stations.kompor = null;
-  s.plate = [];
-  s.hand = null;
-  s.counter = ['spaghetti', 'daging', 'saus', 'keju', 'roti', 'patty'];
-  s.message = 'Hari selesai — semua pesanan tersaji!';
-  return s;
-}
-
-export function buildShot(s, name) {
-  if (name === 'play') return shotPlay(s);
-  if (name === 'serve') return shotServe(s);
-  if (name === 'end') return shotEnd(s);
-  return shotStart(s);
+export function applyShot(s, name) {
+  SHOTS[name](s);
 }
