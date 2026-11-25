@@ -1,6 +1,7 @@
-// Dapur Kilat v12 — preset screenshot untuk dossier.
+// Dapur Kilat v14 — preset screenshot untuk dossier.
 // ?shot=start|play|serve|end — tiap preset menyusun state yang menampilkan
 // adegan berbeda: judul, bermain, piring siap saji, dan akhir hari.
+// v14: preset serve — saji SEMPURNA (kesabaran tinggi + teks "SEMPURNA!").
 
 import { DISHES } from './config.js';
 import { spawnOrder, startGame } from './state.js';
@@ -11,7 +12,7 @@ const SHOTS = {
     s.screen = 'title';
   },
   // Tengah permainan: koin 45, saji 4/12, kombo x2, waktu 20, 3 order,
-  // kedua stasiun sibuk, piring 2 bahan, tangan pegang kecap.
+  // kedua stasiun sibuk, piring 3 bahan (nasi+telur+kecap), tangan pegang udang.
   play(s) {
     startGame(s);
     s.coins = 45;
@@ -25,13 +26,13 @@ const SHOTS = {
     ];
     s.stations.talenan = { item: 'udang', t: 1.2, total: 2.0 };
     s.stations.kompor = { item: 'nasi', t: 2.0, total: 3.2 };
-    s.plate = ['nasi', 'telur'];
-    s.hand = 'kecap';
+    s.plate = ['nasi', 'telur', 'kecap'];
+    s.hand = 'udang';
     s.message = 'Nasi Goreng hampir jadi — sajikan sebelum hangus!';
     s.messageT = 10;
   },
-  // Piring lengkap siap saji: koin 80, saji 7/12, kombo x3, waktu 34,
-  // float '+Rp 24'.
+  // Piring lengkap siap saji + SEMPURNA!: koin 80, saji 7/12, kombo x3,
+  // waktu 34, float '+Rp 27' (24 + bonus SEMPURNA! 3), teks "SEMPURNA!".
   serve(s) {
     startGame(s);
     s.coins = 80;
@@ -39,13 +40,14 @@ const SHOTS = {
     s.combo = 3;
     s.time = 34;
     s.orders = [
-      { dish: 'spaghetti', patience: 28, max: 45 },
+      { dish: 'spaghetti', patience: 42, max: 45 },
       { dish: 'burger', patience: 35, max: 45 },
       { dish: 'esteh', patience: 40, max: 45 },
     ];
     s.plate = ['spaghetti', 'daging', 'saus', 'keju'];
-    s.floatText = { text: '+Rp 24', t: 1.2 };
-    s.message = 'Spaghetti Bolognese siap! Sajikan sekarang.';
+    s.floatText = { text: '+Rp 27', t: 1.2 };
+    s.perfect = { text: 'SEMPURNA!', t: 1.5 };
+    s.message = 'SEMPURNA! Spaghetti Bolognese disajikan! +Rp 27.';
     s.messageT = 10;
   },
   // Akhir hari: koin 210, saji 12/12, kombo x5, waktu 514, 1 strike.

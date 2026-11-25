@@ -1,8 +1,8 @@
-// Dapur Kilat v12 — konfigurasi game.
+// Dapur Kilat v14 — konfigurasi game.
 // Menu: ayam HILANG total. Nasi Goreng Udang, Spaghetti Bolognese,
 // Burger (+ kentang goreng sebagai pendamping visual), Es Teh Manis.
-// v12: nasi goreng — nasi HARUS terlihat (telur + udang kecil, di pinggir);
-// spaghetti — helai DITUMPUK rapat tanpa rongga.
+// v14: bonus "SEMPURNA!" (saji dengan kesabaran >75%) + uap bergerak;
+// udang + daging direvisi total (referensi baru); warna fresh & menarik.
 
 export const W = 1280;
 export const H = 720;
@@ -12,7 +12,7 @@ export const STATIONS = {
   kompor: { name: 'KOMPOR', time: 3.2 },
 };
 
-// Bahan: id -> { label, station: 'talenan' | 'kompor' | 'siap', color, draw }.
+// Bahan: id -> { label, station: 'talenan' | 'kompor' | 'siap', color }.
 // 'siap' = langsung bisa ditaruh di piring tanpa diolah.
 export const INGREDIENTS = {
   nasi: { label: 'Nasi', station: 'kompor', color: '#f2e6c8' },
@@ -20,7 +20,7 @@ export const INGREDIENTS = {
   kecap: { label: 'Kecap', station: 'siap', color: '#5a2c12' },
   udang: { label: 'Udang', station: 'talenan', color: '#f28b6d' },
   spaghetti: { label: 'Spaghetti', station: 'kompor', color: '#f2c94c' },
-  daging: { label: 'Daging', station: 'talenan', color: '#c96a5a' },
+  daging: { label: 'Daging', station: 'talenan', color: '#c0392b' },
   saus: { label: 'Saus Tomat', station: 'siap', color: '#c93a1e' },
   keju: { label: 'Keju', station: 'siap', color: '#fff6e0' },
   roti: { label: 'Roti', station: 'siap', color: '#e8b96a' },
@@ -54,9 +54,11 @@ export const RULES = {
   tipMax: 6, // Rp tip tercepat
   comboStep: 0.10, // +10% per langkah kombo
   comboMax: 0.50, // maks +50%
+  perfectThreshold: 0.75, // saji dengan kesabaran >75% = SEMPURNA!
+  perfectBonus: 3, // Rp bonus saji sempurna
 };
 
-// Layout (tetap, v11).
+// Layout (tetap, v11–v14).
 export const LAYOUT = {
   header: { x: 0, y: 0, w: 1280, h: 64 },
   talenan: { x: 12, y: 76, w: 280, h: 220 },

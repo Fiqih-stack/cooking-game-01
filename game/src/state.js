@@ -1,7 +1,10 @@
-// Dapur Kilat v12 — state & logika game.
+// Dapur Kilat v14 — state & logika game.
 // Alur: ambil bahan di meja -> olah di stasiun (talenan/kompor) atau
 // langsung ke piring (bahan 'siap') -> rakit di piring -> sajikan.
-// v12: logika SAMA dengan v11; hanya visual nasgor + spaghetti yang berubah.
+// v14: bonus "SEMPURNA!" — saji dengan kesabaran >75% dapat +Rp 3.
+// PENTING (pelajaran v12): s.prepared mencatat bahan yang sudah lewat
+// stasiun — hanya bahan 'siap' ATAU yang ada di s.prepared boleh ditaruh
+// di piring. Tanpa ini, bahan matang ditolak dari piring (bug v12).
 
 import { DISHES, INGREDIENTS, RULES, STATIONS } from './config.js';
 
@@ -23,6 +26,7 @@ export function createState(opts = {}) {
     message: '',
     messageT: 0,
     floatText: null, // { text, t }
+    perfect: null, // { text: 'SEMPURNA!', t } — saji sempurna terakhir
     paused: false,
     orderQueue: opts.orderQueue ? [...opts.orderQueue] : null,
     orderIdx: 0,
@@ -64,6 +68,7 @@ export function startGame(s) {
   s.message = 'Selamat pagi! Sajikan 12 pesanan hari ini.';
   s.messageT = 3;
   s.floatText = null;
+  s.perfect = null;
   s.paused = false;
   spawnOrder(s);
   spawnOrder(s);
@@ -143,6 +148,7 @@ export function findMatchingOrder(s) {
 }
 
 // Sajikan: orderIdx -1 = cari otomatis; >=0 = tiket tertentu.
+// v14: saji SEMPURNA bila kesabaran >75% — bonus +Rp 3 + teks "SEMPURNA!".
 export function serve(s, orderIdx = -1) {
   if (s.screen !== 'main' || s.paused) return false;
   if (s.plate.length === 0) { setMessage(s, 'Piring kosong! Rakit hidangan dulu.'); return false; }
@@ -154,20 +160,25 @@ export function serve(s, orderIdx = -1) {
   }
   const order = s.orders[idx];
   const dish = DISHES[order.dish];
-  // Harga: base + tip kecepatan + bonus kombo.
+  // Harga: base + tip kecepatan + bonus kombo + bonus SEMPURNA!
   const frac = Math.max(0, order.patience / order.max);
   const tip = Math.round(RULES.tipMax * frac);
   const comboBonus = Math.round(dish.base * Math.min(RULES.comboMax, s.combo * RULES.comboStep));
-  const total = dish.base + tip + comboBonus;
+  const isPerfect = frac > RULES.perfectThreshold;
+  const perfectBonus = isPerfect ? RULES.perfectBonus : 0;
+  const total = dish.base + tip + comboBonus + perfectBonus;
   s.coins += total;
   s.served += 1;
   s.combo += 1;
   s.floatText = { text: '+Rp ' + total, t: 1.2 };
+  s.perfect = isPerfect ? { text: 'SEMPURNA!', t: 1.5 } : null;
   s.orders.splice(idx, 1);
   s.plate = [];
   s.prepared = {};
   s.patience = Math.max(RULES.patienceMin, s.patience - RULES.patienceStep);
-  setMessage(s, dish.label + ' disajikan! +Rp ' + total + '.');
+  setMessage(s, isPerfect
+    ? 'SEMPURNA! ' + dish.label + ' disajikan! +Rp ' + total + '.'
+    : dish.label + ' disajikan! +Rp ' + total + '.');
   if (s.served >= RULES.servesToWin) {
     s.screen = 'win';
     setMessage(s, 'Hari selesai! Total Rp ' + s.coins + '.');
@@ -187,6 +198,10 @@ export function tick(s, dt) {
   if (s.floatText) {
     s.floatText.t -= dt;
     if (s.floatText.t <= 0) s.floatText = null;
+  }
+  if (s.perfect) {
+    s.perfect.t -= dt;
+    if (s.perfect.t <= 0) s.perfect = null;
   }
   // Stasiun berjalan.
   for (const name of ['talenan', 'kompor']) {

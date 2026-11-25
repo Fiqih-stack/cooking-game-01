@@ -1,4 +1,4 @@
-// Dapur Kilat v12 — input (mouse + keyboard).
+// Dapur Kilat v14 — input (mouse + keyboard).
 // Klik: bahan di meja, stasiun, piring, tombol SAJIKAN, tiket, tombol judul.
 // Tombol 1–6: pilih bahan. Spasi: sajikan. R: restart. P: jeda.
 

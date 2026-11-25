@@ -1,4 +1,4 @@
-// Dapur Kilat v12 — loop utama & titik masuk.
+// Dapur Kilat v14 — loop utama & titik masuk.
 // Render tiap frame; tick logika dengan delta waktu.
 
 import { LAYOUT } from './config.js';

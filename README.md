@@ -19,7 +19,7 @@ Game masak 2D yang cepat dan menegangkan: ambil bahan, olah di talenan dan kompo
 2. Olah bahan mentah di **talenan** (potong, 2 dtk) atau **kompor** (masak, 3,2 dtk). Bahan "siap" langsung bisa ditaruh.
 3. Klik piring untuk menaruh bahan yang sudah diolah.
 4. Klik **SAJIKAN**, tekan Spasi, atau klik tiket pesanan untuk menyajikan hidangan yang lengkap.
-5. Sajikan cepat untuk dapat tip, jaga kombo untuk bonus koin, dan jangan biarkan pesanan hangus.
+5. Sajikan cepat untuk dapat tip, jaga kombo untuk bonus koin, dan sajikan dengan kesabaran di atas 75% untuk bonus **SEMPURNA!** (+Rp 3).
 
 ## Kontrol
 

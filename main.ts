@@ -1,8 +1,10 @@
-// Dapur Kilat v12 — program utama (Node 22, stdlib saja).
+// Dapur Kilat v14 — program utama (Node 22, stdlib saja).
 // Menyalin game/ + screenshots/ ke /output lalu menulis dossier.json
 // via buildDossier(dir, caps) dari ./vendor/makefun-game.ts (salinan kit,
 // tak diubah). buildDossier membaca game/ + screenshots/ dari dir itu
 // sendiri dan mengembalikan dossier sebagai Uint8Array (JSON kanonis).
+// (Pelajaran v12: JANGAN panggil buildDossier dengan objek {text, ...};
+// signature-nya buildDossier(dir, caps).)
 
 import { buildDossier } from './vendor/makefun-game.ts';
 import { cp, mkdir, writeFile } from 'node:fs/promises';

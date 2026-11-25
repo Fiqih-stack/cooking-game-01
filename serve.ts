@@ -1,4 +1,4 @@
-// Dapur Kilat v12 — server lokal untuk render screenshot.
+// Dapur Kilat v14 — server lokal untuk render screenshot.
 // Melayani game/ sebagai file statis; '/' dialihkan (302) ke
 // /game/index.html dengan query dipertahankan (agar ?shot=... jalan).
 
