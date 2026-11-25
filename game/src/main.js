@@ -1,9 +1,11 @@
-// Dapur Kilat v19 — main (loop game + wiring).
+// Dapur Kilat v20 — main (loop game + wiring).
+// v20: kuras antrean s.sfx tiap frame (mainkan suara) + kelola musik latar.
 import { createState, tick } from './state.js';
 import { render } from './render.js';
 import { setupInput } from './input.js';
 import { LAYOUT } from './config.js';
 import { applyShot } from './shots.js';
+import { playSfx, setMuted, updateMusic } from './sound.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
@@ -23,6 +25,13 @@ function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
   if (!s.paused) tick(s, dt);
+  // v20 S1: kuras antrean suara + sinkron bisu + musik latar.
+  setMuted(s.muted);
+  if (s.sfx && s.sfx.length > 0) {
+    for (const name of s.sfx) playSfx(name);
+    s.sfx.length = 0;
+  }
+  updateMusic(s.screen === 'main' && !s.paused && !s.muted);
   render(ctx, s);
   requestAnimationFrame(frame);
 }

@@ -1,18 +1,23 @@
-// Dapur Kilat v19 — input (mouse + keyboard).
+// Dapur Kilat v23 — input (mouse + keyboard).
 // Klik: bahan di meja (18 kartu, 2 baris x 9), stasiun, piring,
-// tombol SAJIKAN, tiket, tombol judul, tombol upgrade (v19 S1).
+// tombol SAJIKAN, tiket, tombol judul, tombol upgrade (v19 S1),
+// tombol speaker (v20 S1, bisukan), tombol Buang (v23 R1, kosongkan
+// piring — dicek SEBELUM piring karena tombol ada di dalam panel PIRING).
 // Tombol 1-9: baris 1 counter. Tombol A,S,D,F,G,H,J,K,L: baris 2 counter.
-// Spasi: sajikan. R: restart. P: jeda.
-// v19: tidak ada perubahan counter (tetap 18, 7 hidangan).
+// Spasi: sajikan. R: restart. P: jeda. M: bisukan suara.
+// v20: setiap gestur memanggil sound.ensureAudio() (AudioContext butuh
+// gestur pengguna; tanpa ini musik/sfx tidak berbunyi).
 
 import { COUNTER, counterCardRect } from './config.js';
-import { buyUpgrade, pickIngredient, placeOnPlate, serve, startGame, useStation } from './state.js';
+import { buyUpgrade, clearPlate, pickIngredient, placeOnPlate, serve, startGame, useStation } from './state.js';
+import { ensureAudio, setMuted } from './sound.js';
 
 // Tombol baris 2 counter (berurutan dengan COUNTER[9..17]).
 const ROW2_KEYS = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'];
 
 export function setupInput(canvas, s, layout) {
   canvas.addEventListener('click', (e) => {
+    ensureAudio();
     const r = canvas.getBoundingClientRect();
     const x = (e.clientX - r.left) * (canvas.width / r.width);
     const y = (e.clientY - r.top) * (canvas.height / r.height);
@@ -21,7 +26,13 @@ export function setupInput(canvas, s, layout) {
 
   window.addEventListener('keydown', (e) => {
     if (e.repeat) return;
+    ensureAudio();
     const k = e.key.toLowerCase();
+    if (k === 'm') {
+      s.muted = !s.muted;
+      setMuted(s.muted);
+      return;
+    }
     if (k === 'p') {
       if (s.screen === 'main') s.paused = !s.paused;
       return;
@@ -77,6 +88,12 @@ function handleClick(s, x, y, L) {
   }
   if (s.screen !== 'main' || s.paused) return;
 
+  // v20 S1: tombol speaker (bisukan) di pojok kanan header.
+  if (inside(x, y, L.tombolSpeaker)) {
+    s.muted = !s.muted;
+    setMuted(s.muted);
+    return;
+  }
   // v19 S1: tombol upgrade stasiun di footer.
   if (inside(x, y, L.tombolUpgrade.talenan)) { buyUpgrade(s, 'talenan'); return; }
   if (inside(x, y, L.tombolUpgrade.kompor)) { buyUpgrade(s, 'kompor'); return; }
@@ -85,6 +102,9 @@ function handleClick(s, x, y, L) {
   // Stasiun.
   if (inside(x, y, L.talenan)) { useStation(s, 'talenan'); return; }
   if (inside(x, y, L.kompor)) { useStation(s, 'kompor'); return; }
+  // v23 R1: tombol Buang (kosongkan piring) — dicek SEBELUM piring
+  // karena tombol ada di dalam area panel PIRING.
+  if (inside(x, y, L.tombolBuang)) { clearPlate(s); return; }
   // Piring.
   if (inside(x, y, L.piring)) { placeOnPlate(s); return; }
   // Tiket pesanan (klik = sajikan tiket itu).

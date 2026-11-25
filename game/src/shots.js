@@ -1,133 +1,83 @@
-// Dapur Kilat v19 — preset state untuk 4 screenshot.
-// Dipakai via ?shot=start|play|serve|end. Semua nilai eksplisit agar
-// screenshot deterministik (tidak bergantung pada Math.random).
-import { DISHES } from './config.js';
+// Dapur Kilat v23 — preset screenshot (4 keadaan deterministik).
+// main.js memanggil applyShot(s, name) via ?shot=name (v21: shots.js
+// harus mengekspor makeShot DAN applyShot).
+// v23: end menampilkan konfeti (endT 2.5); start menampilkan tagline;
+// play menampilkan countdown RUSH + progress level; serve menampilkan
+// ikon udang di header + tombol Buang (piring kosong -> tidak tampil).
+// Judul: seperti v22 (kartu menu + keycap) + tagline v23.
+// Main: seperti v22 (wajah pelanggan di tiket, Lv) + progres v21.
 
-function baseMain(s) {
+import { createState } from './state.js';
+
+export const SHOTS = ['start', 'play', 'serve', 'end'];
+
+export function makeShot(name) {
+  const s = createState();
   s.screen = 'main';
-  s.time = 0;
-  s.coins = 0;
-  s.served = 0;
-  s.combo = 0;
-  s.strikes = 0;
-  s.patience = 45;
-  s.orders = [];
-  s.orderTimer = 0;
-  s.hand = null;
-  s.plate = [];
-  s.prepared = {};
-  s.stations = { talenan: null, kompor: null };
-  s.message = '';
-  s.messageT = 3;
-  s.floatText = null;
-  s.perfect = null;
-  s.paused = false;
-  s.rushActive = false;
-  s.rushTimer = 0;
-  s.rushNext = 30;
-  s.specialDish = null;
-  s.upg = { talenan: 0, kompor: 0 };
-  s.coinFx = [];
-  s.sparkles = [];
-  s.breakdown = '';
-}
-
-export function applyShot(s, shot) {
-  if (shot === 'start') {
+  if (name === 'start') {
     s.screen = 'title';
-    s.time = 0;
-    return;
+    return s;
   }
-  if (shot === 'play') {
-    baseMain(s);
-    s.time = 20;
-    s.coins = 45;
-    s.served = 4;
-    s.combo = 2;
-    s.specialDish = 'nasgor';
-    s.upg = { talenan: 1, kompor: 0 };
-    // RUSH aktif.
-    s.rushActive = true;
-    s.rushTimer = 8;
-    s.rushNext = 30;
-    s.message = '⚡ RUSH! Pesanan datang lebih cepat, tip +Rp 2!';
-    s.messageT = 3;
-    // 3 order: nasgor spesial, miegoreng VIP, strawsquash urgent.
-    s.orders = [
-      { dish: 'nasgor', patience: 30, max: 45, vip: false, special: true, paket: null, freshT: 0 },
-      { dish: 'miegoreng', patience: 38, max: 45, vip: true, special: false, paket: null, freshT: 0 },
-      { dish: 'strawsquash', patience: 8, max: 45, vip: false, special: false, paket: null, freshT: 0 },
-    ];
-    // Piring: nasi + telur + kecap (nasgor sebagian).
-    s.plate = ['nasi', 'telur', 'kecap'];
-    s.prepared = {};
-    s.hand = 'udang';
-    s.stations = {
-      talenan: { item: 'udang', t: 1.2, total: 1.4 },
-      kompor: { item: 'nasi', t: 2.0, total: 3.2 },
-    };
-    return;
-  }
-  if (shot === 'serve') {
-    baseMain(s);
-    s.time = 34;
-    s.coins = 80;
-    s.served = 7;
+  if (name === 'play') {
+    s.coins = 54;
+    s.served = 6;
     s.combo = 3;
-    s.specialDish = 'lemonsquash';
-    s.upg = { talenan: 1, kompor: 0 };
-    s.rushActive = false;
-    s.message = 'SEMPURNA! Spaghetti Bolognese disajikan! +Rp 27.';
-    s.messageT = 3;
-    // PAKET burger + esteh (18 + 11 + 5 = Rp 34).
+    s.level = 2;
+    // v22 Q1: RUSH aktif dengan sisa 8.4 dtk -> tampil "RUSH! 8 dtk";
+    // served 6 -> level tampil "Lv 2 (2/4)".
+    s.rushActive = true;
+    s.rushTimer = 8.4;
+    s.time = 42;
+    // v22 Q3: tangan pegang udang -> ikon udang di header.
+    s.hand = 'udang';
     s.orders = [
-      { dish: 'spaghetti', patience: 42, max: 45, vip: false, special: false, paket: null, freshT: 0 },
-      { dish: 'burger', patience: 35, max: 45, vip: true, special: false, paket: null, freshT: 0 },
-      { dish: 'burger', patience: 40, max: 45, vip: false, special: false, paket: ['burger', 'esteh'], freshT: 1.2 },
+      { dish: 'nasgor', patience: 22, max: 42, vip: false, special: true, paket: null, freshT: 0, customer: 2 },
+      { dish: 'burger', patience: 15, max: 40.5, vip: true, special: false, paket: null, freshT: 0, customer: 0 },
+      { dish: 'esteh', patience: 8, max: 39, vip: false, special: false, paket: null, freshT: 0, customer: 4 },
     ];
-    // Piring: spaghetti lengkap.
-    s.plate = ['spaghetti', 'daging', 'saus', 'keju'];
+    s.plate = ['nasi', 'telur', 'kecap', 'udang'];
     s.prepared = {};
-    s.hand = null;
-    s.stations = { talenan: null, kompor: null };
-    s.perfect = { text: 'SEMPURNA!', t: 1.5 };
-    s.floatText = { text: '+Rp 27', t: 1.2 };
-    s.breakdown = '17 dasar + 6 tip + 3 kombo + 3 SEMPURNA! = Rp 27';
-    // v19 S3/S6: partikel koin + sparkle Cling terlihat di shot.
-    for (let i = 0; i < 8; i++) {
-      const a = -Math.PI / 2 + (i - 4) * 0.25;
-      s.coinFx.push({
-        x: 752 + (i - 4) * 14, y: 188 - i * 8,
-        vx: Math.cos(a) * 200 - 80, vy: Math.sin(a) * 200,
-        t: 0.6, life: 0.8,
-      });
-    }
-    for (let i = 0; i < 10; i++) {
-      const a = (i / 10) * Math.PI * 2;
-      s.sparkles.push({
-        x: 752 + Math.cos(a) * (40 + (i % 3) * 18),
-        y: 188 + Math.sin(a) * 30,
-        r: 7 + (i % 3) * 3, rot: i * 0.6, vr: 1.5, t: 0.7, life: 0.9,
-      });
-    }
-    return;
+    return s;
   }
-  if (shot === 'end') {
-    baseMain(s);
+  if (name === 'serve') {
+    s.coins = 98;
+    s.served = 7;
+    s.combo = 4;
+    s.level = 2;
+    s.time = 62;
+    s.orders = [
+      { dish: 'spaghetti', patience: 20, max: 40.5, vip: false, special: true, paket: null, freshT: 0, customer: 1 },
+      { dish: 'miegoreng', patience: 26, max: 39, vip: false, special: false, paket: null, freshT: 0, customer: 3 },
+      { dish: 'lemonsquash', patience: 12, max: 37.5, vip: true, special: false, paket: null, freshT: 0, customer: 5 },
+    ];
+    s.plate = [];
+    s.floatText = { text: '+Rp 29', t: 1.2 };
+    s.perfect = { text: 'SEMPURNA!', t: 1.5 };
+    s.breakdown = '19 dasar + 6 tip + 3 kombo = Rp 29';
+    s.message = 'SEMPURNA! Nasi Goreng disajikan! +Rp 29.';
+    s.servedFace = { customer: 2, t: 1.2 };
+    // v22 Q3: tangan pegang udang (bahan berikutnya) -> ikon udang di
+    // header (RUSH tidak aktif di shot ini).
+    s.hand = 'udang';
+    return s;
+  }
+  if (name === 'end') {
     s.screen = 'win';
-    s.time = 514;
     s.coins = 210;
     s.served = 12;
-    s.combo = 5;
-    s.strikes = 1;
-    s.specialDish = 'esteh';
-    s.upg = { talenan: 2, kompor: 1 };
-    s.message = 'Hari selesai! Total Rp 210.';
-    s.orders = [
-      { dish: 'esteh', patience: 45, max: 45, vip: false, special: true, paket: null, freshT: 0 },
-      { dish: 'burger', patience: 45, max: 45, vip: false, special: false, paket: null, freshT: 0 },
-      { dish: 'strawsquash', patience: 45, max: 45, vip: true, special: false, paket: null, freshT: 0 },
-    ];
-    return;
+    s.time = 514;
+    s.level = 3;
+    s.stats = { perfect: 7, vip: 3, paket: 2, bestCombo: 5, rushServes: 2 };
+    // v22 Q2: 12 pelanggan yang disajikan (baris wajah di layar akhir).
+    s.servedCustomers = [0, 1, 2, 3, 4, 5, 0, 1, 2, 3, 4, 5];
+    // v23 R2: konfeti sudah jatuh (endT 2.5 dtk).
+    s.endT = 2.5;
+    return s;
   }
+  return s;
+}
+
+export function applyShot(s, name) {
+  const p = makeShot(name);
+  for (const k of Object.keys(p)) s[k] = p[k];
 }

@@ -1,14 +1,20 @@
-// Dapur Kilat v19 — konfigurasi game.
+// Dapur Kilat v23 — konfigurasi game.
 // Menu: 7 hidangan (6 dari v15 + Mie Goreng Spesial v17).
 // Ayam HILANG total. Nasi Goreng Udang, Spaghetti Bolognese,
 // Burger (+ kentang goreng sebagai pendamping visual), Es Teh Manis,
 // Ice Strawberry Squash, Lemon Squash Mint, Mie Goreng Spesial.
-// v19 (6 butir): S1 Toko Upgrade Stasiun (koin berguna); S2 Pesanan
-// Paket (1 tiket, 2 hidangan); S3 partikel koin + rincian bayaran;
-// S4 koki + latar dapur hidup; S5 RUSH tiap 30 dtk; S6 efek Cling
-// mengkilau (pesanan selesai + pesanan baru fresh).
-// Dipertahankan v18: VIP (2x), urgensi <10 dtk, preview tiket,
-// counter 2x9 (18 bahan), SEMPURNA!, SPESIAL (+Rp 2), kilau kombo >= 3.
+// v23 (4 kelompok poles): R1 Tombol Buang + bersihkan "Di tangan"
+// (panel PIRING); R2 Efek RUSH di papan + konfeti menang; R3 Hiasan
+// tengah layar judul (tagline + garis emas); R4 Indikator musik "♪"
+// di header.
+// Dipertahankan v22: countdown RUSH + progress level, wajah akhir,
+// placeholder papan + ikon tangan, keycap + koin berdenyut.
+// v21: statistik akhir, progress bar, dekorasi dapur, batas PAKET,
+// perbaiki overlap harga/SEMPURNA.
+// v20: suara & musik, wajah pelanggan, level 1-3, kartu menu judul.
+// v19: upgrade, PAKET, koin, koki, RUSH 30, Cling.
+// v18: VIP, urgensi, preview, SPESIAL, kilau kombo. v17: 7 hidangan,
+// SEMPURNA!, VIP.
 
 export const W = 1280;
 export const H = 720;
@@ -18,7 +24,7 @@ export const STATIONS = {
   kompor: { name: 'KOMPOR', time: 3.2 },
 };
 
-// Waktu olah per level upgrade (S1): Lv0 -> Lv1 -> Lv2.
+// Waktu olah per level upgrade (S1 v19): Lv0 -> Lv1 -> Lv2.
 export const UPGRADE_TIMES = {
   talenan: [2.0, 1.4, 1.0],
   kompor: [3.2, 2.3, 1.7],
@@ -66,6 +72,17 @@ export const DISHES = {
   lemonsquash: { label: 'Lemon Squash Mint', ingredients: ['lemon', 'mint', 'soda', 'es'], base: 14 },
 };
 
+// v20 S2: 6 pelanggan (wajah di tiket). skin = warna kulit, hair = warna
+// rambut, style: 'pendek' | 'panjang' | 'ikal' | 'topi' | 'bando' | 'pita'.
+export const CUSTOMERS = [
+  { skin: '#f2c9a0', hair: '#5a3a1e', style: 'pendek' },
+  { skin: '#e8b88a', hair: '#2b2118', style: 'panjang' },
+  { skin: '#f7d7b0', hair: '#e83e6b', style: 'pita' },
+  { skin: '#c98a5a', hair: '#1a1a1a', style: 'topi' },
+  { skin: '#f2c9a0', hair: '#e8a33a', style: 'ikal' },
+  { skin: '#e8b88a', hair: '#3e9b4f', style: 'bando' },
+];
+
 // Urutan bahan di meja (counter), 2 baris x 9 kartu.
 // 6 pertama dipertahankan (nasi, telur, udang, spaghetti, daging, patty)
 // agar tombol 1-6 tidak berubah dari v1-v14.
@@ -82,7 +99,7 @@ export const KEY_LABELS = [
 
 export const RULES = {
   ordersMax: 3, // tiket di papan
-  orderGap: 2.5, // detik: order baru setelah slot kosong
+  orderGap: 2.5, // detik: order baru setelah slot kosong (Lv1; lihat levelGap)
   patienceStart: 45, // detik
   patienceStep: 1.5, // detik berkurang tiap saji
   patienceMin: 25, // detik
@@ -93,7 +110,7 @@ export const RULES = {
   comboMax: 0.50, // maks +50%
   perfectThreshold: 0.75, // saji dengan kesabaran >75% = SEMPURNA!
   perfectBonus: 3, // Rp bonus saji sempurna
-  vipChance: 0.25, // v17 S1: peluang order baru jadi VIP (tiket emas)
+  vipChance: 0.25, // v17 S1: peluang order baru jadi VIP (Lv1; lihat levelVip)
   vipMultiplier: 2, // v17 S1: VIP membayar 2x harga dasar
   urgentSeconds: 10, // v17 S2: kesabaran <10 dtk = denyut merah
   rushEvery: 30, // v19 S5: detik antar periode RUSH (v18: 45)
@@ -102,15 +119,28 @@ export const RULES = {
   rushOrderGap: 1.2, // v18 C2: gap spawn order saat RUSH (detik)
   specialBonus: 2, // v18 C3: harga tambahan hidangan SPESIAL (Rp)
   comboGlowAt: 3, // v18 C4: kombo >= 3 -> kilau emas di piring + teks emas
-  paketChance: 0.15, // v19 S2: peluang order baru jadi PAKET (2 hidangan)
+  paketChance: 0.15, // v19 S2: peluang order baru jadi PAKET (Lv1; lihat levelPaket)
   paketBonus: 5, // v19 S2: bonus Rp pesanan paket (di atas jumlah dasar)
   freshSeconds: 1.5, // v19 S6: durasi kilau "fresh" order baru (detik)
   coinFxCount: 10, // v19 S3: jumlah partikel koin saat saji
   clingCount: 12, // v19 S6: jumlah sparkle Cling saat saji
+  // v20 S3: tabel per level (index = level-1). Level = floor(saji/4)+1.
+  levelGap: [2.5, 2.0, 1.5], // gap spawn order per level
+  levelPaket: [0.15, 0.20, 0.25], // peluang PAKET per level
+  levelVip: [0.25, 0.30, 0.35], // peluang VIP per level
+  levelServes: 4, // saji per level (naik level tiap 4 saji)
+  // v22 Q4: durasi denyut koin di header saat saji (detik).
+  coinPulseSeconds: 0.6,
+  // v23 R2: jumlah potong konfeti di layar akhir menang.
+  confettiCount: 40,
 };
 
 // Layout (v15: kartu jadi 2 baris x 9 kolom; sisanya tetap v11-v14).
 // v19: footer dirombak jadi toko upgrade (S1).
+// v20: tombol speaker di header (S1); kartu menu judul (S4).
+// v21: kartu akhir diperbesar untuk statistik (P1).
+// v22: kartu akhir diperbesar lagi untuk baris wajah (Q2).
+// v23: tombol Buang di panel PIRING (R1).
 export const LAYOUT = {
   header: { x: 0, y: 0, w: 1280, h: 64 },
   talenan: { x: 12, y: 76, w: 280, h: 220 },
@@ -124,12 +154,19 @@ export const LAYOUT = {
   papan: { x: 920, y: 76, w: 348, h: 632 },
   tiket: { x: 932, y: 88, w: 324, h: 196, gap: 12 },
   tombolJudul: { x: 440, y: 520, w: 400, h: 64 },
-  kartuAkhir: { x: 360, y: 190, w: 560, h: 320 },
+  // v22 Q2: kartu akhir 600x460 untuk baris wajah.
+  kartuAkhir: { x: 340, y: 130, w: 600, h: 460 },
   // v19 S1: tombol upgrade di footer.
   tombolUpgrade: {
     talenan: { x: 12, y: 634, w: 280, h: 40 },
     kompor: { x: 300, y: 634, w: 280, h: 40 },
   },
+  // v20 S1: tombol speaker (bisukan) di pojok kanan header.
+  tombolSpeaker: { x: 1228, y: 14, w: 36, h: 36 },
+  // v20 S4: kartu menu layar judul (7 kartu, 160x150, gap 12, x awal 44).
+  kartuMenu: { x: 44, y: 285, w: 160, h: 150, gap: 12 },
+  // v23 R1: tombol Buang di panel PIRING (bawah-tengah).
+  tombolBuang: { x: 702, y: 260, w: 100, h: 28 },
 };
 
 // Kotak kartu counter ke-i (0..17) — dipakai render.js (gambar) dan

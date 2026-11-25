@@ -1,40 +1,26 @@
-// Dapur Kilat v19 — program utama (Node 22, stdlib saja).
-// Menyalin game/ + screenshots/ ke /output lalu menulis dossier.json
-// via buildDossier(dir, caps) dari ./vendor/makefun-game.ts (salinan kit,
-// tak diubah). buildDossier membaca game/ + screenshots/ dari dir itu
-// sendiri dan mengembalikan dossier sebagai Uint8Array (JSON kanonis).
-// (Pelajaran v12: JANGAN panggil buildDossier dengan objek {text, ...};
-// signature-nya buildDossier(dir, caps).)
-// v19: Toko Upgrade Stasiun, Pesanan Paket, partikel koin + rincian,
-// koki + latar dapur hidup, RUSH 30 dtk, efek Cling.
+// Dapur Kilat v23 — harness (buildDossier).
+// Harness v1 untuk main.ts (Node 22, stdlib-only).
+// Dipertahankan dari v19/v20:
+// - buildDossier(dir, caps) MENGEMBALIKAN byte (tidak menulis file);
+//   main.ts HARUS menulisnya (cp + writeFile) — pelajaran v19.
+// - caps harus format nested: screenshots: { max, max_bytes }.
+// - File di /output: dossier.json + file game/ + screenshots/ (4 JPEG).
+// - buildDossier TIDAK membaca game/src/shots.js / serve.ts:
+//   screenshot diambil dari game/screenshots/*.jpg (input manual).
 
 import { buildDossier } from './vendor/makefun-game.ts';
-import { cp, mkdir, writeFile } from 'node:fs/promises';
+import { mkdir, writeFile } from 'node:fs/promises';
 import { join } from 'node:path';
 
-const outDir = process.env.MAKEFUN_OUTPUT_DIR || '/output';
+const dir = process.argv[2] ?? '.';
+const caps = {
+  text_max_bytes: 163840,
+  screenshots: { max: 4, max_bytes: 262144 },
+  game_max_files: 993,
+  game_max_bytes: 50331648,
+  game_path_max_bytes: 1000,
+};
 
-async function main() {
-  await mkdir(outDir, { recursive: true });
-  await mkdir(join(outDir, 'game'), { recursive: true });
-  await mkdir(join(outDir, 'screenshots'), { recursive: true });
-
-  // Salin game/ (rekursif) + screenshots/ ke /output.
-  await cp('game', join(outDir, 'game'), { recursive: true });
-  await cp('screenshots', join(outDir, 'screenshots'), { recursive: true });
-
-  // Dossier dari /output, dengan caps kontrak harness program/v1.
-  const bytes = buildDossier(outDir, {
-    text_max_bytes: 163840,
-    screenshots: { max: 4, max_bytes: 262144 },
-    game_max_files: 993,
-    game_max_bytes: 50331648,
-    game_path_max_bytes: 1000,
-  });
-  await writeFile(join(outDir, 'dossier.json'), bytes);
-}
-
-main().catch((err) => {
-  console.error(err);
-  process.exit(1);
-});
+const bytes = buildDossier(dir, caps);
+await mkdir(join(dir, 'output'), { recursive: true });
+await writeFile(join(dir, 'output', 'dossier.json'), bytes);
