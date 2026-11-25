@@ -1,42 +1,34 @@
-[![make.fun · best-cooking-game-20261125-0137](https://make.fun/badge/best-cooking-game-20261125-0137.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
-[![rank](https://make.fun/badge/best-cooking-game-20261125-0137/Fiqih-stack/cooking-game-01/rank.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137)
-[![reward](https://make.fun/badge/best-cooking-game-20261125-0137/Fiqih-stack/cooking-game-01/reward.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137)
+[![Play Dapur Kilat](https://img.shields.io/badge/Play-Dapur%20Kilat-58b368?style=for-the-badge)](https://make.fun/bounty/best-cooking-game-20261125-0137)
+[![make.fun](https://img.shields.io/badge/Built%20with-make.fun-ff6b35?style=for-the-badge)](https://make.fun)
+[![Try make.fun](https://img.shields.io/badge/Try-make.fun-7c3aed?style=for-the-badge)](https://make.fun/?ref=6sc35azz)
 
-# cooking-game-01 — Dapur Kilat
+# Dapur Kilat
 
-Dapur Kilat (Lightning Kitchen) is a complete 2D cooking game for the
-[make.fun bounty](https://make.fun/bounty/best-cooking-game-20261125-0137):
-orders arrive on the board with a draining patience bar, ingredients wait on
-the counter, the cutting board and the stove turn them into dishes, and the
-plate carries each dish to the customer. Serve 12 orders to close the day;
-three failed orders end the shift. Four original recipes, keyboard and mouse
-controls, no network, no external assets — every pixel is drawn in code.
-This version (v2) polishes the kitchen: gradient panels with soft shadows,
-smooth wood and metal textures, detailed shaded food art, and a neat,
-fine-dining plating on a porcelain plate with a thin gold rim.
+Game masak 2D yang cepat dan menegangkan: ambil bahan, olah di talenan dan kompor, rakit di piring, lalu sajikan sebelum pesanan hangus. Sajikan 12 pesanan untuk menyelesaikan hari — tiga pesanan hangus dan shift berakhir.
 
-Screenshots in `screenshots/` show the title screen, mid-play, a dish ready
-to serve, and the day-complete screen.
+## Menu
 
-Referral code: `6sc35azz`
+- **Nasi Goreng Udang** (Rp 19) — nasi + telur + kecap + udang
+- **Spaghetti Bolognese** (Rp 17) — spaghetti + daging + saus tomat + keju
+- **Burger** (Rp 18) — roti + patty + keju + selada, dengan kentang goreng sebagai pendamping
+- **Es Teh Manis** (Rp 11) — teh + es + gula
 
-## Play it
+## Cara main
 
-```sh
-node serve.ts
-```
+1. Klik bahan di meja (atau tombol 1–6) untuk mengambilnya.
+2. Olah bahan mentah di **talenan** (potong, 2 dtk) atau **kompor** (masak, 3,2 dtk). Bahan "siap" langsung bisa ditaruh.
+3. Klik piring untuk menaruh bahan yang sudah diolah.
+4. Klik **SAJIKAN**, tekan Spasi, atau klik tiket pesanan untuk menyajikan hidangan yang lengkap.
+5. Sajikan cepat untuk dapat tip, jaga kombo untuk bonus koin, dan jangan biarkan pesanan hangus.
 
-Then open http://localhost:8080/ in a desktop browser. Click ingredients
-(or keys 1–6) to pick them up, click the cutting board or stove to process
-them, click the plate to assemble, and click a matching order — or press
-Space — to serve. P pauses, R restarts.
+## Kontrol
 
-## Controls
+- **Klik** — ambil bahan, pakai stasiun, taruh di piring, sajikan
+- **1–6** — pilih bahan dari meja
+- **Spasi** — sajikan hidangan di piring
+- **R** — mulai hari dari awal
+- **P** — jeda / lanjut
 
-- Mouse: ingredient, station, plate, order ticket, or the serve button.
-- Keys 1–6: pick the ingredient in that counter slot.
-- Space: serve the order the plate matches. P: pause. R: restart.
+Game berjalan offline di browser, tanpa aset luar — semua gambar digambar dengan kode canvas.
 
-## License
-
-MIT — see [LICENSE](./LICENSE).
+Dibangun untuk bounty [Make the best cooking game](https://make.fun/bounty/best-cooking-game-20261125-0137) di make.fun.
