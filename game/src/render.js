@@ -1,9 +1,19 @@
-// Dapur Kilat v23 — render (canvas 2D).
-// v23: R1 Tombol Buang + hapus "Di tangan" dari panel PIRING; R2 border
-// RUSH di papan + konfeti menang; R3 tagline + garis emas judul;
-// R4 not musik "♪" di header.
-// Dipertahankan v22: countdown RUSH + progress level, wajah akhir,
-// placeholder papan + ikon tangan, keycap + koin berdenyut.
+// Super Kitchen v28 — render (canvas 2D).
+// v28: TEMA PETIR — logo petir di judul (X1), tombol MULAI (X2),
+// tombol SAJIKAN saat RUSH (X3). Helper baru: drawBolt +
+// titleBoltCenters (diekspor untuk tes).
+// v27: RENAME Dapur Kilat -> Super Kitchen; W2 Tombol SAJIKAN
+// hitungan bahan ("SAJIKAN (n)").
+// v26: V1 Tiket cocok hijau; V2 Ikon stasiun + banner berlatar;
+// V3 Efek HANGUS! merah.
+// Dipertahankan v25: Buang merah + pil Musik; wajah tiket 60px +
+// tangan saat RUSH; banner LEVEL.
+// v24: footer 2 baris; "♪" judul; RUSH di SAJIKAN; efek Buang;
+// wajah tiket.
+// v23: Tombol Buang + hapus "Di tangan" dari panel; border RUSH di
+// papan + konfeti menang; tagline judul; "♪" header.
+// v22: countdown RUSH + progress level, wajah akhir, placeholder
+// papan + ikon tangan, keycap + koin berdenyut.
 // v21: statistik akhir, progress bar, dekorasi dapur, batas PAKET,
 // perbaiki overlap harga/SEMPURNA.
 // v20: speaker, wajah pelanggan, lencana Lv, kartu menu.
@@ -12,7 +22,7 @@
 // v15: counter 2x9. v14: SEMPURNA! + uap.
 
 import { COUNTER, CUSTOMERS, DISHES, INGREDIENTS, KEY_LABELS, LAYOUT, RULES, STATIONS, UPGRADE_COSTS, UPGRADE_MAX, UPGRADE_TIMES, counterCardRect } from './config.js';
-import { levelFor, levelLabel, orderPrice, requiredIngredients, stationTime } from './state.js';
+import { findMatchingOrder, levelFor, levelLabel, orderPrice, requiredIngredients, stationTime } from './state.js';
 
 function rr(ctx, x, y, w, h, r) {
   ctx.beginPath();
@@ -30,6 +40,37 @@ function text(ctx, s, x, y, font, color, align = 'left', baseline = 'alphabetic'
   ctx.textAlign = align;
   ctx.textBaseline = baseline;
   ctx.fillText(s, x, y);
+}
+
+// v28 X1-X3: logo petir emas (digambar canvas, bukan emoji — konsisten
+// dengan gaya gambar game). Jalur lokal: lebar 30px, tinggi 60px.
+// time: denyut alpha 0.85 + 0.15*sin(time*3) (di layar judul time=0,
+// jadi deterministik).
+export function drawBolt(ctx, x, y, sc, time = 0) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.scale(sc, sc);
+  ctx.globalAlpha = 0.85 + 0.15 * Math.sin(time * 3);
+  ctx.beginPath();
+  ctx.moveTo(6, -30);
+  ctx.lineTo(22, -30);
+  ctx.lineTo(10, -4);
+  ctx.lineTo(20, -4);
+  ctx.lineTo(-2, 30);
+  ctx.lineTo(2, 2);
+  ctx.lineTo(-8, 2);
+  ctx.closePath();
+  ctx.fillStyle = '#ffd700';
+  ctx.fill();
+  ctx.strokeStyle = '#e8a33a';
+  ctx.lineWidth = 2;
+  ctx.stroke();
+  ctx.restore();
+}
+
+// v28 X1: posisi tengah petir kiri/kanan judul — 48px dari tepi teks.
+export function titleBoltCenters(titleW) {
+  return [640 - titleW / 2 - 48, 640 + titleW / 2 + 48];
 }
 
 // v19 S4: koki mungil. mood: 'senyum' | 'rayakan' | 'sedih'.
@@ -212,6 +253,7 @@ function drawBackground(ctx, s) {
 // v22 Q1: countdown RUSH + progress level; Q3: ikon bahan di kiri teks
 // "Di tangan"; Q4: koin berdenyut.
 // v23 R4: not musik "♪" di kiri tombol speaker (bila musik berbunyi).
+// v25 U2: ikon tangan tetap tampil saat RUSH (di kiri teks RUSH).
 function drawHeader(ctx, s, L) {
   const rush = s.rushActive;
   ctx.fillStyle = rush ? '#b85a1e' : '#5a3a1e';
@@ -230,6 +272,8 @@ function drawHeader(ctx, s, L) {
   text(ctx, 'Strike: ' + s.strikes + '/3', 830, 40, '22px sans-serif', s.strikes > 0 ? '#ff8a7a' : '#fff');
   if (rush) {
     const a = 0.7 + 0.3 * Math.sin(s.time * 6);
+    // v25 U2: ikon tangan di kiri teks RUSH (bila pegang bahan).
+    if (s.hand) drawIngredientIcon(ctx, s.hand, 980, 40, 12);
     ctx.globalAlpha = a;
     // v22 Q1: countdown RUSH (sisa detik, dibulatkan ke bawah).
     text(ctx, '⚡ RUSH! ' + Math.floor(s.rushTimer) + ' dtk', 1000, 42, 'bold 26px sans-serif', '#ffd700');
@@ -621,6 +665,7 @@ export function drawDish(ctx, dishId, cx, cy, sc, time) {
 }
 
 // ---- Panel stasiun ----
+// v26 V2: ikon bahan yang sedang diolah di tengah ikon stasiun.
 function drawStation(ctx, s, L, name) {
   const box = L[name];
   const st = s.stations[name];
@@ -648,6 +693,13 @@ function drawStation(ctx, s, L, name) {
     ctx.beginPath(); ctx.arc(ix - 34, iy, 10, 0, Math.PI * 2); ctx.fill();
     ctx.beginPath(); ctx.arc(ix + 34, iy, 10, 0, Math.PI * 2); ctx.fill();
   }
+  // v26 V2: ikon bahan yang sedang diolah di tengah ikon stasiun.
+  if (st) {
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(ix, iy, 26, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2; ctx.stroke();
+    drawIngredientIcon(ctx, st.item, ix, iy, 22);
+  }
   if (st) {
     const pct = Math.min(1, st.t / st.total);
     ctx.fillStyle = '#e3dcc8';
@@ -662,10 +714,21 @@ function drawStation(ctx, s, L, name) {
   }
 }
 
+// v25 U1: ikon tempat sampah putih kecil (digambar canvas, bukan emoji).
+function drawTrashIcon(ctx, x, y) {
+  ctx.fillStyle = '#fff';
+  // Gagang.
+  ctx.fillRect(x + 3, y, 4, 3);
+  // Tutup.
+  ctx.fillRect(x - 2, y + 3, 14, 3);
+  // Badan.
+  rr(ctx, x, y + 6, 10, 12, 2); ctx.fill();
+}
+
 // ---- Panel piring ----
-// v23 R1: tombol Buang (kosongkan piring) di bawah-tengah, tampil bila
-// plate.length > 0; teks "Di tangan" DIHAPUS dari panel (sudah ada di
-// header, v22 Q3).
+// v25 U1: tombol Buang merah-oranye + ikon tempat sampah.
+// v24 T3: partikel abu-abu Buang (s.clearFx) digambar di atas piring.
+// v23 R1: tombol Buang; teks "Di tangan" sudah dihapus dari panel.
 function drawPlate(ctx, s, L) {
   const box = L.piring;
   ctx.fillStyle = '#fff8ea';
@@ -731,6 +794,14 @@ function drawPlate(ctx, s, L) {
     ctx.fill();
     ctx.restore();
   }
+  // v24 T3: partikel abu-abu Buang (puff).
+  for (const p of s.clearFx) {
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, p.t / p.life) * 0.7;
+    ctx.fillStyle = '#9a9a9a';
+    ctx.beginPath(); ctx.arc(p.x, p.y, p.r, 0, Math.PI * 2); ctx.fill();
+    ctx.restore();
+  }
   // Teks "+Rp X" melayang.
   if (s.floatText) {
     ctx.save();
@@ -749,12 +820,14 @@ function drawPlate(ctx, s, L) {
   if (n === 0 && !s.floatText && !s.perfect) {
     text(ctx, 'Klik piring untuk taruh bahan.', box.x + box.w / 2, box.y + box.h - 14, '15px sans-serif', '#8a7a5a', 'center');
   }
-  // v23 R1: tombol Buang (kosongkan piring) — tampil bila ada bahan.
+  // v25 U1: tombol Buang merah-oranye + ikon tempat sampah (tampil bila
+  // ada bahan). v23 R1: tombol Buang (kosongkan piring).
   if (n > 0) {
     const b = L.tombolBuang;
-    ctx.fillStyle = '#8a7a5a';
+    ctx.fillStyle = '#e2574c';
     rr(ctx, b.x, b.y, b.w, b.h, 8); ctx.fill();
-    text(ctx, 'Buang', b.x + b.w / 2, b.y + 19, 'bold 15px sans-serif', '#fff', 'center');
+    drawTrashIcon(ctx, b.x + 12, b.y + 5);
+    text(ctx, 'Buang', b.x + b.w / 2 + 8, b.y + 19, 'bold 15px sans-serif', '#fff', 'center');
   }
 }
 
@@ -772,12 +845,26 @@ function drawMessage(ctx, s, L) {
 }
 
 // Tombol SAJIKAN.
+// v27 W2: label "SAJIKAN (n)" bila piring berisi n bahan.
+// v28 X3: petir emas di kiri tombol saat RUSH aktif.
+// v24 T2: border oranye berdenyut saat RUSH aktif.
 function drawServeButton(ctx, s, L) {
   const box = L.sajikan;
   const can = s.plate.length > 0;
   ctx.fillStyle = can ? '#2a9a3a' : '#9a9a9a';
   rr(ctx, box.x, box.y, box.w, box.h, 10); ctx.fill();
-  text(ctx, 'SAJIKAN', box.x + box.w / 2, box.y + 32, 'bold 22px sans-serif', '#fff', 'center');
+  const label = can ? 'SAJIKAN (' + s.plate.length + ')' : 'SAJIKAN';
+  text(ctx, label, box.x + box.w / 2, box.y + 32, 'bold 22px sans-serif', '#fff', 'center');
+  if (s.rushActive) {
+    // v28 X3: petir emas di kiri tombol (label di tengah, tidak menumpuk).
+    drawBolt(ctx, box.x + 28, box.y + 24, 0.55, s.time);
+    const a = 0.4 + 0.3 * Math.sin(s.time * 6);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = '#ff8a2a'; ctx.lineWidth = 3;
+    rr(ctx, box.x, box.y, box.w, box.h, 10); ctx.stroke();
+    ctx.restore();
+  }
 }
 
 // Kartu counter (2 baris x 9). v15: grid pakai counterCardRect (shared).
@@ -808,6 +895,7 @@ function drawCounter(ctx, s, L) {
 }
 
 // Footer: toko upgrade (v19 S1).
+// v24 T1: info kontrol 2 baris (sebelumnya 1 baris terpotong di tepi).
 function drawFooter(ctx, s, L) {
   const box = L.footer;
   ctx.fillStyle = '#fff8ea';
@@ -827,12 +915,14 @@ function drawFooter(ctx, s, L) {
       : STATIONS[name].name + ' Lv' + lv + ' -> Lv' + (lv + 1) + ' (' + UPGRADE_TIMES[name][lv + 1] + ' dtk) — Rp ' + cost;
     text(ctx, label, b.x + b.w / 2, b.y + 26, 'bold 15px sans-serif', '#fff', 'center');
   }
-  // Info kontrol.
-  text(ctx, 'R: mulai ulang • P: jeda • M: suara • Klik tiket untuk sajikan pesanan itu', box.x + 620, box.y + 52, '14px sans-serif', '#8a7a5a');
+  // v24 T1: info kontrol 2 baris (x=620, muat di 620..908).
+  text(ctx, 'R: mulai ulang • P: jeda • M: suara', box.x + 620, box.y + 40, '14px sans-serif', '#8a7a5a');
+  text(ctx, 'Klik tiket untuk sajikan pesanan itu', box.x + 620, box.y + 64, '14px sans-serif', '#8a7a5a');
 }
 
 // ---- Papan pesanan (tiket) ----
-function drawTicket(ctx, s, order, t, i, L) {
+// v26 V1: tiket cocok (isMatch) berdenyut hijau (border paling atas).
+function drawTicket(ctx, s, order, t, i, L, isMatch) {
   const box = L.tiket;
   const y = box.y + i * (box.h + box.gap);
   const frac = Math.max(0, order.patience / order.max);
@@ -860,7 +950,7 @@ function drawTicket(ctx, s, order, t, i, L) {
   if (order.vip) {
     ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 3;
     ctx.beginPath(); ctx.arc(t.x + 26, y + 30, 21, 0, Math.PI * 2); ctx.stroke();
-    text(ctx, '★', t.x + 50, y + 20, 'bold 16px sans-serif', '#e8a33a');
+    text(ctx, '★', t.x + 50, y + 20, 'bold 16px sans-serif', '#e83e6b');
   }
   // Nama hidangan di kanan wajah (v20 fix: dari t.x+12 -> t.x+52).
   const nameX = t.x + 52;
@@ -943,9 +1033,21 @@ function drawTicket(ctx, s, order, t, i, L) {
     rr(ctx, t.x + 12, y + box.h - 22, 70, 20, 10); ctx.fill();
     text(ctx, 'PAKET', t.x + 47, y + box.h - 8, 'bold 12px sans-serif', '#fff', 'center');
   }
+  // v26 V1: border hijau berdenyut bila piring cocok dengan tiket ini.
+  if (isMatch) {
+    const a = 0.5 + 0.3 * Math.sin(s.time * 6);
+    ctx.save();
+    ctx.globalAlpha = a;
+    ctx.strokeStyle = '#2a9a3a'; ctx.lineWidth = 3;
+    rr(ctx, t.x, y, box.w, box.h, 10); ctx.stroke();
+    ctx.restore();
+  }
 }
 
 // v23 R2: border oranye berdenyut di sekeliling papan saat RUSH aktif.
+// v25 U2: wajah tiket naik 60px + mulai 15px di atas posisi wajah;
+// latar putih r=22 agar menutupi penuh wajah tiket di bawah (r=18).
+// v26 V1: drawBoard menghitung tiket cocok (findMatchingOrder) sekali.
 function drawBoard(ctx, s, L) {
   const box = L.papan;
   ctx.fillStyle = '#fff8ea';
@@ -955,7 +1057,8 @@ function drawBoard(ctx, s, L) {
   if (s.orders.length === 0) {
     text(ctx, 'Belum ada pesanan.', box.x + 16, box.y + 70, '16px sans-serif', '#8a7a5a');
   }
-  s.orders.forEach((order, i) => drawTicket(ctx, s, order, L.tiket, i, L));
+  const matchIdx = findMatchingOrder(s);
+  s.orders.forEach((order, i) => drawTicket(ctx, s, order, L.tiket, i, L, i === matchIdx));
   // v22 Q3: placeholder slot kosong ("Menunggu pesanan…").
   for (let i = s.orders.length; i < RULES.ordersMax; i++) {
     const y = L.tiket.y + i * (L.tiket.h + L.tiket.gap);
@@ -966,6 +1069,20 @@ function drawBoard(ctx, s, L) {
     rr(ctx, L.tiket.x, y, L.tiket.w, L.tiket.h, 10); ctx.stroke();
     ctx.restore();
     text(ctx, 'Menunggu pesanan…', L.tiket.x + L.tiket.w / 2, y + L.tiket.h / 2 + 6, '15px sans-serif', '#a89a7a', 'center');
+  }
+  // v25 U2: wajah pelanggan senang naik & memudar di posisi tiket.
+  if (s.servedTicket) {
+    const st = s.servedTicket;
+    const progress = 1 - st.t / RULES.servedTicketSeconds;
+    const rise = RULES.servedTicketStartOffset + progress * RULES.servedTicketRise;
+    const fx = L.tiket.x + 26, fy = st.y + 30 - rise;
+    ctx.save();
+    ctx.globalAlpha = Math.max(0, st.t / RULES.servedTicketSeconds);
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(fx, fy, 22, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2.5; ctx.stroke();
+    drawCustomer(ctx, fx, fy, 18, st.customer, 'senang');
+    ctx.restore();
   }
   // v23 R2: border RUSH di papan.
   if (s.rushActive) {
@@ -978,7 +1095,54 @@ function drawBoard(ctx, s, L) {
   }
 }
 
+// v26 V2: pil gelap transparan di belakang banner (ukur lebar teks).
+function drawBanner(ctx, txt, x, y, size, color) {
+  ctx.save();
+  ctx.font = 'bold ' + Math.round(size) + 'px sans-serif';
+  const w = ctx.measureText(txt).width;
+  ctx.globalAlpha = 0.45;
+  ctx.fillStyle = '#000000';
+  rr(ctx, x - w / 2 - 20, y - size - 10, w + 40, size + 20, 12); ctx.fill();
+  ctx.restore();
+  ctx.save();
+  ctx.font = 'bold ' + Math.round(size) + 'px sans-serif';
+  ctx.textAlign = 'center';
+  ctx.textBaseline = 'alphabetic';
+  ctx.lineWidth = 6;
+  ctx.strokeStyle = '#5a3a1e';
+  ctx.strokeText(txt, x, y);
+  ctx.fillStyle = color;
+  ctx.fillText(txt, x, y);
+  ctx.restore();
+}
+
+// v25 U3: banner "LEVEL n!" di tengah layar (membesar saat muncul,
+// memudar di akhir). Digambar paling depan (setelah board).
+function drawLevelUp(ctx, s) {
+  if (!s.levelUp) return;
+  const t = s.levelUp.t;
+  const size = 48 + (RULES.levelUpSeconds - t) * 10;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, t / 0.5);
+  drawBanner(ctx, s.levelUp.text, 640, 300, size, '#ffd700');
+  ctx.restore();
+}
+
+// v26 V3: efek "HANGUS!" merah di (640, 380) — di bawah banner LEVEL
+// agar tidak tumpang tindih bila keduanya aktif bersamaan.
+function drawStrikeFlash(ctx, s) {
+  if (!s.strikeFlash) return;
+  const t = s.strikeFlash.t;
+  ctx.save();
+  ctx.globalAlpha = Math.min(1, t / 0.5);
+  drawBanner(ctx, s.strikeFlash.text, 640, 380, 48, '#e2574c');
+  ctx.restore();
+}
+
 // ---- Layar judul ----
+// v28 X1: logo petir emas di kiri-kanan "SUPER KITCHEN".
+// v28 X2: logo petir emas mengapit tombol MULAI.
+// v25 U1: pil "♪ Musik" di kanan tombol MULAI (bila musik berbunyi).
 // v23 R3: tagline + garis emas di celah antara kartu menu dan tombol.
 function drawTitle(ctx, s, L) {
   drawBackground(ctx, s);
@@ -999,7 +1163,13 @@ function drawTitle(ctx, s, L) {
   ctx.fillStyle = '#fff8ea';
   rr(ctx, 340, 78, 600, 100, 16); ctx.fill();
   ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2; ctx.stroke();
-  text(ctx, 'DAPUR KILAT', 640, 142, 'bold 56px sans-serif', '#e2574c', 'center');
+  // v28 X1: petir di kiri-kanan judul (posisi dari lebar teks riil).
+  ctx.font = 'bold 56px sans-serif';
+  const titleW = ctx.measureText('SUPER KITCHEN').width;
+  const [boltL, boltR] = titleBoltCenters(titleW);
+  drawBolt(ctx, boltL, 122, 1.0, s.time);
+  drawBolt(ctx, boltR, 122, 1.0, s.time);
+  text(ctx, 'SUPER KITCHEN', 640, 142, 'bold 56px sans-serif', '#e2574c', 'center');
   text(ctx, 'Sajikan 12 pesanan sebelum shift berakhir!', 640, 172, '20px sans-serif', '#5a3a1e', 'center');
   // Heading menu + garis emas.
   text(ctx, 'MENU HARI INI', 640, 268, 'bold 22px sans-serif', '#5a3a1e', 'center');
@@ -1065,6 +1235,17 @@ function drawTitle(ctx, s, L) {
   ctx.fillStyle = '#e2574c';
   rr(ctx, btn.x, btn.y, btn.w, btn.h, 12); ctx.fill();
   text(ctx, 'MULAI MEMASAK', btn.x + btn.w / 2, btn.y + 42, 'bold 28px sans-serif', '#fff', 'center');
+  // v28 X2: petir emas mengapit teks MULAI (di atas tombol merah).
+  drawBolt(ctx, btn.x + 36, btn.y + 32, 0.55, s.time);
+  drawBolt(ctx, btn.x + btn.w - 36, btn.y + 32, 0.55, s.time);
+  // v25 U1: pil "♪ Musik" di kanan tombol MULAI (bila musik berbunyi).
+  if (!s.muted) {
+    const pm = L.pilMusik;
+    ctx.fillStyle = '#fff8ea';
+    rr(ctx, pm.x, pm.y, pm.w, pm.h, 8); ctx.fill();
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 2; ctx.stroke();
+    text(ctx, '♪ Musik', pm.x + pm.w / 2, pm.y + 21, '15px sans-serif', '#8a7a5a', 'center');
+  }
   // Instruksi.
   text(ctx, 'Klik bahan di meja, olah di TALENAN / KOMPOR, taruh di PIRING, lalu SAJIKAN.', 640, 620, '17px sans-serif', '#5a3a1e', 'center');
   text(ctx, 'R: mulai ulang • P: jeda • M: suara • 3 pesanan hangus = shift berakhir.', 640, 650, '15px sans-serif', '#8a7a5a', 'center');
@@ -1190,4 +1371,7 @@ export function render(ctx, s, L = LAYOUT) {
   drawCounter(ctx, s, L);
   drawFooter(ctx, s, L);
   drawBoard(ctx, s, L);
+  // v25 U3: banner LEVEL paling depan. v26 V3: efek HANGUS!.
+  drawLevelUp(ctx, s);
+  drawStrikeFlash(ctx, s);
 }

@@ -1,4 +1,4 @@
-// Dapur Kilat v23 — input (mouse + keyboard).
+// Super Kitchen v28 — input (mouse + keyboard).
 // Klik: bahan di meja (18 kartu, 2 baris x 9), stasiun, piring,
 // tombol SAJIKAN, tiket, tombol judul, tombol upgrade (v19 S1),
 // tombol speaker (v20 S1, bisukan), tombol Buang (v23 R1, kosongkan

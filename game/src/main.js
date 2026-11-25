@@ -1,4 +1,4 @@
-// Dapur Kilat v20 — main (loop game + wiring).
+// Super Kitchen v28 — main (loop game + wiring).
 // v20: kuras antrean s.sfx tiap frame (mainkan suara) + kelola musik latar.
 import { createState, tick } from './state.js';
 import { render } from './render.js';

@@ -1,14 +1,22 @@
-// Dapur Kilat v23 — konfigurasi game.
+// Super Kitchen v28 — konfigurasi game.
 // Menu: 7 hidangan (6 dari v15 + Mie Goreng Spesial v17).
 // Ayam HILANG total. Nasi Goreng Udang, Spaghetti Bolognese,
 // Burger (+ kentang goreng sebagai pendamping visual), Es Teh Manis,
 // Ice Strawberry Squash, Lemon Squash Mint, Mie Goreng Spesial.
-// v23 (4 kelompok poles): R1 Tombol Buang + bersihkan "Di tangan"
-// (panel PIRING); R2 Efek RUSH di papan + konfeti menang; R3 Hiasan
-// tengah layar judul (tagline + garis emas); R4 Indikator musik "♪"
-// di header.
-// Dipertahankan v22: countdown RUSH + progress level, wajah akhir,
-// placeholder papan + ikon tangan, keycap + koin berdenyut.
+// v28: TEMA PETIR — logo petir di judul (X1), tombol MULAI (X2),
+// tombol SAJIKAN saat RUSH (X3).
+// v27: RENAME Dapur Kilat -> Super Kitchen; W1 Stasiun terisi di
+// preset play; W2 Tombol SAJIKAN hitungan bahan.
+// v26: V1 Tiket cocok hijau; V2 Ikon stasiun + banner berlatar;
+// V3 Efek HANGUS!.
+// Dipertahankan v25: Buang merah + pil Musik; wajah tiket 60px +
+// tangan saat RUSH; banner LEVEL.
+// v24: footer 2 baris; "♪" judul; RUSH di SAJIKAN; efek Buang;
+// wajah tiket.
+// v23: Tombol Buang + bersihkan "Di tangan"; RUSH di papan + konfeti
+// menang; hiasan judul; indikator musik header.
+// v22: countdown RUSH + progress level, wajah akhir, placeholder
+// papan + ikon tangan, keycap + koin berdenyut.
 // v21: statistik akhir, progress bar, dekorasi dapur, batas PAKET,
 // perbaiki overlap harga/SEMPURNA.
 // v20: suara & musik, wajah pelanggan, level 1-3, kartu menu judul.
@@ -133,6 +141,16 @@ export const RULES = {
   coinPulseSeconds: 0.6,
   // v23 R2: jumlah potong konfeti di layar akhir menang.
   confettiCount: 40,
+  // v24 T3: jumlah partikel abu-abu saat Buang + durasi wajah tiket.
+  clearFxCount: 6, // partikel abu-abu saat Buang
+  servedTicketSeconds: 1.2, // durasi wajah tiket naik & memudar
+  // v25 U2: wajah tiket naik 60px + mulai 15px di atas posisi wajah.
+  servedTicketRise: 60, // px naik selama servedTicketSeconds
+  servedTicketStartOffset: 15, // px di atas posisi wajah saat muncul
+  // v25 U3: durasi banner "LEVEL n!" di tengah layar.
+  levelUpSeconds: 1.5, // detik
+  // v26 V3: durasi efek "HANGUS!" saat pesanan hangus.
+  strikeFlashSeconds: 1.0, // detik
 };
 
 // Layout (v15: kartu jadi 2 baris x 9 kolom; sisanya tetap v11-v14).
@@ -141,6 +159,7 @@ export const RULES = {
 // v21: kartu akhir diperbesar untuk statistik (P1).
 // v22: kartu akhir diperbesar lagi untuk baris wajah (Q2).
 // v23: tombol Buang di panel PIRING (R1).
+// v25: pil "♪ Musik" di judul (U1).
 export const LAYOUT = {
   header: { x: 0, y: 0, w: 1280, h: 64 },
   talenan: { x: 12, y: 76, w: 280, h: 220 },
@@ -167,6 +186,8 @@ export const LAYOUT = {
   kartuMenu: { x: 44, y: 285, w: 160, h: 150, gap: 12 },
   // v23 R1: tombol Buang di panel PIRING (bawah-tengah).
   tombolBuang: { x: 702, y: 260, w: 100, h: 28 },
+  // v25 U1: pil "♪ Musik" di kanan tombol MULAI (layar judul).
+  pilMusik: { x: 852, y: 536, w: 110, h: 32 },
 };
 
 // Kotak kartu counter ke-i (0..17) — dipakai render.js (gambar) dan

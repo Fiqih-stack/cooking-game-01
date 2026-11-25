@@ -2,14 +2,14 @@
 [![rank](https://make.fun/badge/best-cooking-game-20261125-0137/Fiqih-stack/cooking-game-01/rank.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
 [![reward](https://make.fun/badge/best-cooking-game-20261125-0137/Fiqih-stack/cooking-game-01/reward.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
 
-# Dapur Kilat
+# Super Kitchen
 
 Game masak cepat: ambil bahan di meja, olah di TALENAN / KOMPOR,
 rakit di PIRING, sajikan ke pelanggan sebelum kesabaran habis.
 Sajikan 12 pesanan untuk menyelesaikan hari. 3 pesanan hangus =
 shift berakhir.
 
-![Dapur Kilat](https://play.make.fun/?competition=best-cooking-game-20261125-0137)
+![Super Kitchen](https://play.make.fun/?competition=best-cooking-game-20261125-0137)
 [![Make.fun Game](https://make.fun/badge.svg)](https://make.fun)
 [![Play on make.fun](https://make.fun/play-badge.svg)](https://play.make.fun/?competition=best-cooking-game-20261125-0137)
 
@@ -62,6 +62,20 @@ shift berakhir.
   aktif; progress level "Lv 2 (2/4)" di header.
 - **Placeholder papan**: slot pesanan kosong menampilkan
   "Menunggu pesanan…"; ikon bahan tampil di samping "Di tangan".
+- **Tiket cocok berdenyut hijau**: tiket yang cocok dengan isi piring berdenyut hijau.
+- **Ikon bahan di stasiun**: bahan yang sedang diolah tampil di ikon stasiun.
+- **Banner LEVEL berlatar**: pil gelap transparan di belakang teks "LEVEL n!".
+- **Efek HANGUS!**: teks merah besar di tengah layar saat pesanan hangus.
+- **Tombol Buang merah**: pil merah-oranye + ikon tempat sampah (lebih mencolok).
+- **Pil Musik**: pil "♪ Musik" di kanan tombol MULAI (layar judul).
+- **Wajah tiket naik 60px**: mulai 15px di atas posisi wajah + latar putih r=22 (tidak menutupi tiket di bawah).
+- **Tangan saat RUSH**: ikon bahan tetap tampil di kiri teks RUSH.
+- **Banner LEVEL**: "LEVEL n!" besar di tengah layar saat level naik.
+- **Footer rapi**: info kontrol 2 baris (tidak lagi terpotong di tepi).
+- **Musik di judul**: not "♪" emas di kanan tombol MULAI (bila musik berbunyi).
+- **RUSH di SAJIKAN**: tombol SAJIKAN berdenyut oranye saat Jam Sibuk.
+- **Efek Buang**: partikel abu-abu (puff) saat piring dikosongkan.
+- **Wajah tiket**: pelanggan tersenyum naik & memudar di posisi tiket saat pesanannya disajikan.
 - **Tombol Buang**: kosongkan piring bila pesanan hangus / salah rakit (panel PIRING).
 - **Efek RUSH di papan**: border oranye berdenyut di papan saat Jam Sibuk; **konfeti** jatuh di layar akhir menang.
 - **Hiasan judul**: tagline + garis emas di antara kartu menu dan tombol MULAI.

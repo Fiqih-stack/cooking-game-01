@@ -1,4 +1,4 @@
-// Dapur Kilat v23 — harness (buildDossier).
+// Super Kitchen v28 — harness (buildDossier).
 // Harness v1 untuk main.ts (Node 22, stdlib-only).
 // Dipertahankan dari v19/v20:
 // - buildDossier(dir, caps) MENGEMBALIKAN byte (tidak menulis file);

@@ -1,4 +1,4 @@
-// Dapur Kilat v20 — suara & musik (WebAudio, tanpa file eksternal).
+// Super Kitchen v28 — suara & musik (WebAudio, tanpa file eksternal).
 // Semua bunyi disintesis dengan oscillator. Aman dipanggil di Node /
 // headless (tanpa AudioContext): semua fungsi jadi no-op diam-diam.
 // state.js hanya mendorong nama ke s.sfx; main.js menguras antrean dan

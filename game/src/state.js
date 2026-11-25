@@ -1,6 +1,18 @@
-// Dapur Kilat v23 — state & logika game.
+// Super Kitchen v28 — state & logika game.
 // Alur: ambil bahan di meja -> olah di stasiun (talenan/kompor) atau
 // langsung ke piring (bahan 'siap') -> rakit di piring -> sajikan.
+// v28: TEMA PETIR — logo petir di judul (X1), tombol MULAI (X2),
+// tombol SAJIKAN saat RUSH (X3). Semua di render.js; logika SAMA
+// seperti v27 (tidak ada perubahan state).
+// v27: RENAME Dapur Kilat -> Super Kitchen; W1 Stasiun terisi di
+// preset play; W2 Tombol SAJIKAN hitungan bahan.
+// v26: V1 Tiket cocok hijau; V2 Ikon stasiun + banner berlatar;
+// V3 Efek HANGUS! (s.strikeFlash).
+// v25: U1 Buang merah + pil Musik (render); U2 wajah tiket naik 60px
+// + mulai 15px di atas + ikon tangan saat RUSH (render); U3 banner
+// LEVEL naik (s.levelUp).
+// v24: T1 footer 2 baris; T2 "♪" judul + RUSH SAJIKAN; T3 efek Buang
+// (s.clearFx) + wajah tiket saat disajikan (s.servedTicket).
 // v23: R1 Tombol Buang (clearPlate) + R2 konfeti menang (s.endT);
 // R3 hiasan judul + R4 indikator musik (render saja).
 // v22: Q1 countdown RUSH + progress level; Q2 pelanggan yang disajikan
@@ -73,6 +85,13 @@ export function createState(opts = {}) {
     coinPulse: 0,
     // v23 R2: timer layar akhir (detik) — untuk animasi konfeti menang.
     endT: 0,
+    // v24 T3: partikel abu-abu saat Buang + wajah tiket yang disajikan.
+    clearFx: [], // { x, y, vx, vy, r, t, life }
+    servedTicket: null, // { customer, y, t } — wajah naik & memudar di papan
+    // v25 U3: banner "LEVEL n!" di tengah layar saat level naik.
+    levelUp: null, // { text, t }
+    // v26 V3: efek "HANGUS!" merah saat pesanan hangus.
+    strikeFlash: null, // { text, t }
   };
   return s;
 }
@@ -136,14 +155,32 @@ export function buyUpgrade(s, name) {
   return true;
 }
 
+// v24 T3: spawn partikel abu-abu (puff) di tengah piring saat Buang.
+function spawnClearFx(s) {
+  const cx = 752, cy = 188;
+  for (let i = 0; i < RULES.clearFxCount; i++) {
+    const a = (i / RULES.clearFxCount) * Math.PI * 2 + Math.random() * 0.5;
+    const sp = 40 + Math.random() * 60;
+    s.clearFx.push({
+      x: cx + (Math.random() - 0.5) * 30,
+      y: cy + (Math.random() - 0.5) * 15,
+      vx: Math.cos(a) * sp,
+      vy: Math.sin(a) * sp - 30,
+      r: 4 + Math.random() * 3,
+      t: 0.7, life: 0.7,
+    });
+  }
+}
+
 // v23 R1: kosongkan piring (tombol Buang). Kembalikan true bila ada
 // yang dibuang. Mengosongkan plate + prepared; tangan TIDAK disentuh
-// (bahan di tangan tetap di tangan).
+// (bahan di tangan tetap di tangan). v24 T3: spawn partikel abu-abu.
 export function clearPlate(s) {
   if (s.screen !== 'main' || s.paused) return false;
   if (s.plate.length === 0) return false;
   s.plate = [];
   s.prepared = {};
+  spawnClearFx(s);
   pushSfx(s, 'click');
   setMessage(s, 'Piring dikosongkan.');
   return true;
@@ -258,6 +295,13 @@ export function startGame(s) {
   s.coinPulse = 0;
   // v23 R2: reset timer layar akhir.
   s.endT = 0;
+  // v24 T3: reset efek Buang & wajah tiket.
+  s.clearFx = [];
+  s.servedTicket = null;
+  // v25 U3: reset banner LEVEL.
+  s.levelUp = null;
+  // v26 V3: reset efek HANGUS!.
+  s.strikeFlash = null;
   pushSfx(s, 'click');
   spawnOrder(s);
   spawnOrder(s);
@@ -376,6 +420,8 @@ function spawnServeFx(s) {
 // v20 S3: naik level tiap 4 saji. S2: wajah pelanggan senang saat saji.
 // v21 P1: catat statistik hari (perfect/vip/paket/bestCombo/rushServes).
 // v22 Q2: catat pelanggan yang disajikan. Q4: denyut koin di header.
+// v24 T3: catat servedTicket (wajah naik & memudar di papan).
+// v25 U3: banner "LEVEL n!" saat level naik.
 export function serve(s, orderIdx = -1) {
   if (s.screen !== 'main' || s.paused) return false;
   if (s.plate.length === 0) { setMessage(s, 'Piring kosong! Rakit hidangan dulu.'); return false; }
@@ -414,11 +460,17 @@ export function serve(s, orderIdx = -1) {
   s.perfect = isPerfect ? { text: 'SEMPURNA!', t: 1.5 } : null;
   // v20 S2: wajah pelanggan senang di panel PIRING.
   s.servedFace = { customer: order.customer, t: 1.2 };
+  // v24 T3: wajah pelanggan senang naik & memudar di posisi tiket.
+  s.servedTicket = { customer: order.customer, y: 88 + idx * (196 + 12), t: RULES.servedTicketSeconds };
   // v20 S1: suara saji (SEMPURNA! beda nadanya).
   pushSfx(s, isPerfect ? 'perfect' : 'serve');
   // v20 S3: naik level tiap 4 saji.
   const levelAfter = levelFor(s.served);
   s.level = levelAfter;
+  // v25 U3: banner "LEVEL n!" saat level naik.
+  if (levelAfter > levelBefore) {
+    s.levelUp = { text: 'LEVEL ' + levelAfter + '!', t: RULES.levelUpSeconds };
+  }
   // v19 S3: rincian bayaran (hanya bagian yang > 0).
   const parts = [effectiveBase + ' dasar'];
   if (tip > 0) parts.push(tip + ' tip' + (s.rushActive ? ' (RUSH +2)' : ''));
@@ -477,6 +529,21 @@ export function tick(s, dt) {
     s.servedFace.t -= dt;
     if (s.servedFace.t <= 0) s.servedFace = null;
   }
+  // v24 T3: wajah tiket memudar.
+  if (s.servedTicket) {
+    s.servedTicket.t -= dt;
+    if (s.servedTicket.t <= 0) s.servedTicket = null;
+  }
+  // v25 U3: banner LEVEL memudar.
+  if (s.levelUp) {
+    s.levelUp.t -= dt;
+    if (s.levelUp.t <= 0) s.levelUp = null;
+  }
+  // v26 V3: efek HANGUS! memudar.
+  if (s.strikeFlash) {
+    s.strikeFlash.t -= dt;
+    if (s.strikeFlash.t <= 0) s.strikeFlash = null;
+  }
   // v22 Q4: denyut koin berkurang.
   if (s.coinPulse > 0) s.coinPulse = Math.max(0, s.coinPulse - dt);
   // v19 S3/S6: partikel koin + sparkle Cling bergerak & memudar.
@@ -493,6 +560,15 @@ export function tick(s, dt) {
     p.rot += p.vr * dt;
     p.t -= dt;
     if (p.t <= 0) s.sparkles.splice(i, 1);
+  }
+  // v24 T3: partikel abu-abu Buang bergerak & memudar.
+  for (let i = s.clearFx.length - 1; i >= 0; i--) {
+    const p = s.clearFx[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 60 * dt;
+    p.t -= dt;
+    if (p.t <= 0) s.clearFx.splice(i, 1);
   }
   // v19 S6: kilau fresh order baru berkurang.
   for (const o of s.orders) {
@@ -530,6 +606,8 @@ export function tick(s, dt) {
       s.orders.splice(i, 1);
       s.strikes += 1;
       s.combo = 0;
+      // v26 V3: efek "HANGUS!" merah di tengah layar.
+      s.strikeFlash = { text: 'HANGUS!', t: RULES.strikeFlashSeconds };
       pushSfx(s, 'strike');
       setMessage(s, dish.label + ' hangus! Strike ' + s.strikes + '/' + RULES.strikesMax + '.');
       if (s.strikes >= RULES.strikesMax) {
