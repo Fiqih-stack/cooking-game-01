@@ -11,6 +11,12 @@ the counter, the cutting board and the stove turn them into dishes, and the
 plate carries each dish to the customer. Serve 12 orders to close the day;
 three failed orders end the shift. Four original recipes, keyboard and mouse
 controls, no network, no external assets — every pixel is drawn in code.
+This version (v2) polishes the kitchen: gradient panels with soft shadows,
+smooth wood and metal textures, detailed shaded food art, and a neat,
+fine-dining plating on a porcelain plate with a thin gold rim.
+
+Screenshots in `screenshots/` show the title screen, mid-play, a dish ready
+to serve, and the day-complete screen.
 
 Referral code: `6sc35azz`
 

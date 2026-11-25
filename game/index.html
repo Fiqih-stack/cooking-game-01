@@ -3,22 +3,17 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<meta name="description" content="Dapur Kilat — game masak cepat: ambil bahan, olah di talenan dan kompor, rakit di piring, sajikan sebelum pelanggan pergi.">
-<title>Dapur Kilat — Masak cepat, sajikan tepat waktu!</title>
+<meta name="description" content="Dapur Kilat — game masak 2D: pesan, olah, sajikan.">
+<title>Dapur Kilat — game masak</title>
 <style>
-  html, body { margin: 0; padding: 0; background: #2b1d12; }
+  html, body { margin: 0; padding: 0; background: #2e1a0c; min-height: 100%; }
   body { display: flex; align-items: center; justify-content: center; min-height: 100vh; }
-  canvas { display: block; width: min(1280px, 100vw); height: auto; background: #ffe9c9; }
+  canvas { display: block; border-radius: 8px; box-shadow: 0 12px 40px rgba(0, 0, 0, 0.5); }
 </style>
 </head>
 <body>
 <canvas id="game" width="1280" height="720"></canvas>
-<noscript><p style="color:#ffe9c9">Dapur Kilat butuh JavaScript untuk bermain.</p></noscript>
-<script src="src/config.js"></script>
-<script src="src/state.js"></script>
-<script src="src/input.js"></script>
-<script src="src/render.js"></script>
-<script src="src/shots.js"></script>
-<script src="src/main.js"></script>
+<script type="module" src="src/main.js"></script>
+<script type="module" src="src/shots.js"></script>
 </body>
 </html>

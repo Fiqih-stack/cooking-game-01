@@ -1,81 +1,129 @@
-// Dapur Kilat — configuration.
-// One job: every number, name, colour and layout rect the game reads.
-// No logic lives here, so tuning the game means editing this file alone.
+// Dapur Kilat v2 — configuration: recipes, ingredients, timings, layout.
+// Canvas 1280x720 (CSS pixels). Every drawing and hit test uses these numbers.
 
-const DK_CONFIG = {
-  width: 1280,
-  height: 720,
-  ordersToWin: 12,
+export const CANVAS_W = 1280;
+export const CANVAS_H = 720;
+
+export const TIMINGS = {
+  talenan: 2.0, // seconds to chop on the cutting board
+  kompor: 3.2, // seconds to cook on the stove
+  orderRefill: 2.5, // seconds after a slot frees before a new order arrives
+  patienceStart: 45, // seconds of patience for the first order
+  patienceMin: 25, // patience never drops below this
+  patienceStep: 1.5, // patience lost per order already served
+};
+
+export const DAY = {
+  ordersToServe: 12,
   maxStrikes: 3,
   maxActiveOrders: 3,
-  orderEveryMs: 7000, // a new ticket roughly every 7 s keeps the board full
-  patienceMs: 52000,
-  patienceMinMs: 34000,
-  patienceStepMs: 1500,
-  chopMs: 2000, // chopping answers at once — the judge's feel criterion
-  cookMs: 3000,
-  baseCoins: 10,
-  tipMax: 10,
+  tipMax: 6, // fastest serve earns this many extra coins
+  comboStep: 0.1, // each combo step adds 10% to the payout
+  comboCap: 0.5, // combo bonus caps at +50%
 };
 
-// Every ingredient knows its station: 'ready' needs none, 'board' needs the
-// cutting board, 'stove' needs the stove. Each recipe has at most one
-// cooking step, so the stove never becomes a bottleneck.
-const DK_INGREDIENTS = {
-  rice:    { name: 'Nasi',   station: 'stove', color: '#f5f0e1', dark: '#c9bb96' },
-  chicken: { name: 'Ayam',   station: 'board', color: '#f2a65a', dark: '#b96a28' },
-  kecap:   { name: 'Kecap',  station: 'ready', color: '#5a3a22', dark: '#33200f' },
-  noodle:  { name: 'Mie',    station: 'stove', color: '#f7d154', dark: '#c79a1e' },
-  broth:   { name: 'Kaldu',  station: 'ready', color: '#8a5a2b', dark: '#5f3c17' },
-  skewer:  { name: 'Sate',   station: 'stove', color: '#c96f3b', dark: '#8f4520' },
-  sauce:   { name: 'Kacang', station: 'ready', color: '#d98e32', dark: '#9a5f14' },
-  tea:     { name: 'Teh',    station: 'ready', color: '#c97b2d', dark: '#8a4f16' },
-  ice:     { name: 'Es',     station: 'board', color: '#aee6f5', dark: '#5fb6d1' },
-  sugar:   { name: 'Gula',   station: 'ready', color: '#ffffff', dark: '#cfcfcf' },
+// Every ingredient knows which station it needs, or 'siap' when it is ready.
+export const INGREDIENTS = {
+  nasi: { id: 'nasi', name: 'Nasi', station: 'kompor', label: 'Kompor' },
+  ayam: { id: 'ayam', name: 'Ayam', station: 'talenan', label: 'Talenan' },
+  kecap: { id: 'kecap', name: 'Kecap', station: 'siap', label: 'Siap' },
+  mie: { id: 'mie', name: 'Mie', station: 'kompor', label: 'Kompor' },
+  kaldu: { id: 'kaldu', name: 'Kaldu', station: 'siap', label: 'Siap' },
+  sate: { id: 'sate', name: 'Sate', station: 'kompor', label: 'Kompor' },
+  teh: { id: 'teh', name: 'Teh', station: 'siap', label: 'Siap' },
+  es: { id: 'es', name: 'Es', station: 'talenan', label: 'Talenan' },
+  gula: { id: 'gula', name: 'Gula', station: 'siap', label: 'Siap' },
+  kacang: { id: 'kacang', name: 'Kacang', station: 'siap', label: 'Siap' },
 };
 
-const DK_STATION_LABEL = { ready: 'Siap', board: 'Talenan', stove: 'Kompor' };
-
-const DK_RECIPES = [
-  { id: 'nasi-goreng', name: 'Nasi Goreng', color: '#e07840', needs: ['rice', 'chicken', 'kecap'] },
-  { id: 'mie-ayam', name: 'Mie Ayam', color: '#e8b93c', needs: ['noodle', 'chicken', 'broth'] },
-  { id: 'sate-ayam', name: 'Sate Ayam', color: '#c96f3b', needs: ['skewer', 'sauce'] },
-  { id: 'es-teh', name: 'Es Teh Manis', color: '#7fb6d9', needs: ['tea', 'ice', 'sugar'] },
+export const RECIPES = [
+  { id: 'nasi-goreng', name: 'Nasi Goreng', color: '#e07840', colorDark: '#b85a28', ingredients: ['nasi', 'ayam', 'kecap'], base: 16 },
+  { id: 'mie-ayam', name: 'Mie Ayam', color: '#e8b93a', colorDark: '#c0921f', ingredients: ['mie', 'ayam', 'kaldu'], base: 15 },
+  { id: 'sate-ayam', name: 'Sate Ayam', color: '#a85b32', colorDark: '#7e3f1e', ingredients: ['sate', 'kacang'], base: 13 },
+  { id: 'es-teh', name: 'Es Teh Manis', color: '#7fb3d5', colorDark: '#4a7ea6', ingredients: ['teh', 'es', 'gula'], base: 11 },
 ];
 
-function recipeById(id) {
-  return DK_RECIPES.find((r) => r.id === id) || null;
+export function recipeById(id) {
+  return RECIPES.find((r) => r.id === id);
 }
 
-// Geometry every drawing and hit test shares, so the picture and the
-// clicks never disagree. Kitchen on the left (x 0..912), order board right.
-const DK_LAYOUT = {
-  hud: { x: 0, y: 0, w: 1280, h: 64 },
-  board: { x: 924, y: 76, w: 344, h: 628 },
-  ticket: { w: 344, h: 196, gap: 12, y0: 76 },
-  boardStation: { x: 24, y: 92, w: 272, h: 200 },
-  stove: { x: 320, y: 92, w: 292, h: 200 },
-  plate: { x: 636, y: 92, w: 272, h: 200 },
-  serve: { x: 636, y: 308, w: 272, h: 56 },
-  message: { x: 24, y: 308, w: 588, h: 56 },
-  counter: { y: 392, h: 208, x0: 24, slotW: 138, gap: 12 },
-  help: { x: 24, y: 616, w: 888, h: 88 },
+// Warm kitchen palette with depth: every big surface is a gradient.
+export const COLORS = {
+  wallTop: '#f9ead0',
+  wallBottom: '#ecd3a4',
+  woodTop: '#c08a4e',
+  woodBottom: '#96682f',
+  woodGrain: 'rgba(90, 50, 20, 0.10)',
+  headerTop: '#4a2c17',
+  headerBottom: '#2e1a0c',
+  panelTop: '#fff9ea',
+  panelBottom: '#f2dfb0',
+  panelBorder: '#d9b96a',
+  gold: '#d4a437',
+  goldLight: '#f0c75e',
+  ink: '#3a2415',
+  inkDim: '#8a6d4b',
+  cream: '#fff8e7',
+  greenTop: '#58b368',
+  greenBottom: '#3e8f4f',
+  greenDark: '#2e6b3a',
+  red: '#d94f3d',
+  amber: '#e8a13a',
+  plateRim: '#d4a437',
+  garnish: '#58a05a',
 };
 
-const DK_PALETTE = {
-  wall: '#ffe9c9',
-  wallTop: '#ffd9a0',
-  floor: '#e8b07e',
-  floorLine: '#d69a63',
-  wood: '#a9713f',
-  woodDark: '#7d4f27',
-  counterTop: '#c98d54',
-  hud: '#3b2a1e',
-  hudText: '#ffe9c9',
-  ticket: '#fff8ec',
-  ticketEdge: '#d9b380',
-  plateWhite: '#fdfdf8',
-  danger: '#d93a2b',
-  good: '#2e9e4f',
-  gold: '#f2b705',
+// Fixed layout. Stations and board sit on the counter; cards below them.
+export const LAYOUT = {
+  header: { x: 0, y: 0, w: 1280, h: 64 },
+  stations: {
+    talenan: { x: 12, y: 76, w: 280, h: 220 },
+    kompor: { x: 304, y: 76, w: 280, h: 220 },
+    piring: { x: 596, y: 76, w: 312, h: 220 },
+  },
+  message: { x: 12, y: 308, w: 572, h: 48 },
+  serve: { x: 596, y: 308, w: 312, h: 48 },
+  cards: { x: 12, y: 368, w: 896, h: 232, gap: 12, count: 6 },
+  footer: { x: 12, y: 612, w: 896, h: 96 },
+  board: { x: 920, y: 76, w: 348, h: 632 },
+  tickets: { x: 932, y: 88, w: 324, h: 196, gap: 12, count: 3 },
+  plate: { x: 752, y: 188, r: 70 },
+  titleButton: { x: 440, y: 520, w: 400, h: 64 },
+  endCard: { x: 360, y: 190, w: 560, h: 320 },
 };
+
+// One of the six uniform ingredient cards (mise en place: same size, even gaps).
+export function cardRect(i) {
+  const c = LAYOUT.cards;
+  const w = (c.w - (c.count - 1) * c.gap) / c.count;
+  return { x: c.x + i * (w + c.gap), y: c.y, w, h: c.h };
+}
+
+export function ticketRect(i) {
+  const t = LAYOUT.tickets;
+  return { x: t.x, y: t.y + i * (t.h + t.gap), w: t.w, h: t.h };
+}
+
+// Symmetric fine-dining arrangement of n items on the plate, around its centre.
+export function plateSlots(n, cx, cy, radius) {
+  if (n <= 1) return [{ x: cx, y: cy }];
+  if (n === 2) return [{ x: cx - radius * 0.45, y: cy }, { x: cx + radius * 0.45, y: cy }];
+  const out = [];
+  for (let i = 0; i < n; i++) {
+    const a = -Math.PI / 2 + (i * 2 * Math.PI) / n;
+    out.push({ x: cx + Math.cos(a) * radius * 0.45, y: cy + Math.sin(a) * radius * 0.45 });
+  }
+  return out;
+}
+
+export function clamp(v, a, b) {
+  return Math.max(a, Math.min(b, v));
+}
+
+export function lerp(a, b, t) {
+  return a + (b - a) * t;
+}
+
+export function easeOutCubic(t) {
+  return 1 - Math.pow(1 - t, 3);
+}

@@ -1,146 +1,41 @@
-// Dapur Kilat — input.
-// One job: turn mouse clicks and keys into game actions.
-// Geometry comes from DK_LAYOUT, rules from state.js.
+// Dapur Kilat v2 — mouse + keyboard input. DOM only; no game logic here.
+import { CANVAS_W, CANVAS_H } from './config.js';
 
-const DKMouse = { x: 0, y: 0 };
-
-function pointInRect(x, y, r) {
-  return x >= r.x && x <= r.x + r.w && y >= r.y && y <= r.y + r.h;
-}
-
-function ticketRect(index) {
-  const t = DK_LAYOUT.ticket;
-  return { x: DK_LAYOUT.board.x, y: t.y0 + index * (t.h + t.gap), w: t.w, h: t.h };
-}
-
-function counterSlotRect(index) {
-  const c = DK_LAYOUT.counter;
-  return {
-    x: c.x0 + index * (c.slotW + c.gap),
-    y: c.y,
-    w: c.slotW,
-    h: c.h,
+export function createInput(canvas) {
+  const input = {
+    mouse: { x: -100, y: -100 },
+    mouseDown: false,
+    _clicks: [],
+    _keys: [],
   };
-}
 
-function canvasPoint(canvas, event) {
-  const rect = canvas.getBoundingClientRect();
-  return {
-    x: ((event.clientX - rect.left) / rect.width) * DK_CONFIG.width,
-    y: ((event.clientY - rect.top) / rect.height) * DK_CONFIG.height,
-  };
-}
+  function toLocal(e) {
+    const r = canvas.getBoundingClientRect();
+    return {
+      x: ((e.clientX - r.left) * CANVAS_W) / r.width,
+      y: ((e.clientY - r.top) * CANVAS_H) / r.height,
+    };
+  }
 
-function handleClick(x, y) {
-  DKMouse.x = x;
-  DKMouse.y = y;
-  if (DKState.screen === 'title') {
-    resetGame();
-    return;
-  }
-  if (DKState.screen === 'complete' || DKState.screen === 'gameover') {
-    resetGame();
-    return;
-  }
-  if (DKState.screen === 'paused') {
-    DKState.screen = 'playing';
-    return;
-  }
-  if (DKState.screen !== 'playing') return;
-
-  // Order tickets: click a ready one to serve it.
-  for (let i = 0; i < DKState.orders.length; i++) {
-    if (pointInRect(x, y, ticketRect(i))) {
-      const order = DKState.orders[i];
-      if (matchingOrder() === order) serveOrder(order);
-      else showMessage('Piring belum cocok dengan pesanan ini.');
-      return;
-    }
-  }
-  if (pointInRect(x, y, DK_LAYOUT.boardStation)) {
-    clickStation('board');
-    return;
-  }
-  if (pointInRect(x, y, DK_LAYOUT.stove)) {
-    clickStation('stove');
-    return;
-  }
-  if (pointInRect(x, y, DK_LAYOUT.plate)) {
-    clickPlate();
-    return;
-  }
-  if (pointInRect(x, y, DK_LAYOUT.serve)) {
-    if (!serveFirstMatch()) showMessage('Belum ada pesanan yang cocok dengan piring.');
-    return;
-  }
-  for (let i = 0; i < currentCounterSlots().length; i++) {
-    if (pointInRect(x, y, counterSlotRect(i))) {
-      pickIngredient(currentCounterSlots()[i]);
-      return;
-    }
-  }
-}
-
-function handleKey(key) {
-  if (key === 'Enter' && (DKState.screen === 'title' || DKState.screen === 'complete' || DKState.screen === 'gameover')) {
-    resetGame();
-    return;
-  }
-  if (key === 'r' || key === 'R') {
-    if (DKState.screen !== 'title') resetGame();
-    return;
-  }
-  if (key === 'p' || key === 'P') {
-    if (DKState.screen === 'playing') DKState.screen = 'paused';
-    else if (DKState.screen === 'paused') DKState.screen = 'playing';
-    return;
-  }
-  if (DKState.screen !== 'playing') return;
-  if (key === ' ') {
-    serveFirstMatch();
-    return;
-  }
-  const n = parseInt(key, 10);
-  if (n >= 1 && n <= 6) {
-    const slots = currentCounterSlots();
-    if (slots[n - 1] !== undefined) pickIngredient(slots[n - 1]);
-  }
-}
-
-// Whether a point sits on something clickable while playing, so the
-// cursor can turn into a pointer over it.
-function isInteractive(x, y) {
-  if (DKState.screen !== 'playing') return false;
-  for (let i = 0; i < DKState.orders.length; i++) {
-    if (pointInRect(x, y, ticketRect(i))) return true;
-  }
-  if (
-    pointInRect(x, y, DK_LAYOUT.boardStation) ||
-    pointInRect(x, y, DK_LAYOUT.stove) ||
-    pointInRect(x, y, DK_LAYOUT.plate) ||
-    pointInRect(x, y, DK_LAYOUT.serve)
-  ) {
-    return true;
-  }
-  for (let i = 0; i < currentCounterSlots().length; i++) {
-    if (pointInRect(x, y, counterSlotRect(i))) return true;
-  }
-  return false;
-}
-
-function initInput(canvas) {
-  canvas.addEventListener('click', (event) => {
-    const p = canvasPoint(canvas, event);
-    handleClick(p.x, p.y);
+  canvas.addEventListener('pointermove', (e) => {
+    input.mouse = toLocal(e);
   });
-  canvas.addEventListener('mousemove', (event) => {
-    const p = canvasPoint(canvas, event);
-    DKMouse.x = p.x;
-    DKMouse.y = p.y;
-    canvas.style.cursor = isInteractive(p.x, p.y) ? 'pointer' : 'default';
+  canvas.addEventListener('pointerdown', (e) => {
+    if (e.button !== 0) return;
+    input.mouse = toLocal(e);
+    input.mouseDown = true;
+    input._clicks.push({ x: input.mouse.x, y: input.mouse.y });
   });
-  window.addEventListener('keydown', (event) => {
-    if (event.key === ' ') event.preventDefault();
-    handleKey(event.key);
+  window.addEventListener('pointerup', () => {
+    input.mouseDown = false;
   });
+  window.addEventListener('keydown', (e) => {
+    if (e.repeat) return;
+    if (e.key === ' ') e.preventDefault();
+    input._keys.push(e.key.length === 1 ? e.key.toLowerCase() : e.key);
+  });
+
+  input.consumeClick = () => input._clicks.shift() || null;
+  input.consumeKey = () => input._keys.shift() || null;
+  return input;
 }

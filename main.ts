@@ -3,20 +3,16 @@
 // and write /output/dossier.json with buildDossier from vendor/makefun-game.ts.
 // Runs on Node 22, standard library only; reads MAKEFUN_OUTPUT_DIR as a
 // plain path (data, never code) and writes the same bytes on every run.
-
 import { cpSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import { buildDossier } from './vendor/makefun-game.ts';
-
 const repoRoot = dirname(fileURLToPath(import.meta.url));
 const outDir = process.env.MAKEFUN_OUTPUT_DIR ?? '/output';
-
 function copyFresh(from: string, to: string): void {
   if (existsSync(to)) rmSync(to, { recursive: true, force: true });
   cpSync(from, to, { recursive: true });
 }
-
 function main(): void {
   if (!existsSync(join(repoRoot, 'game'))) {
     throw new Error('main.ts: game/ is missing beside main.ts');
@@ -36,5 +32,4 @@ function main(): void {
   });
   writeFileSync(join(outDir, 'dossier.json'), dossier);
 }
-
 main();

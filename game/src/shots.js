@@ -1,82 +1,66 @@
-// Dapur Kilat — screenshot scenes.
-// One job: ?shot=start|play|serve|end builds one fixed scene for the camera.
-// The scene is frozen, so every render of it is the same picture.
+// Dapur Kilat v2 — staged screenshots (?shot=start|play|serve|end).
+// Each shot freezes time so the captured frame is stable.
+import { game } from './main.js';
+import { recipeById } from './config.js';
+import { startDay } from './state.js';
 
-function makeShotOrder(id, recipeId, frac) {
-  const patience = patienceForOrder();
-  return { id, recipeId, patience: patience * frac, maxPatience: patience };
-}
+const params = new URLSearchParams(window.location.search);
+const shot = params.get('shot');
+if (shot) stageShot(shot);
 
-function applyShot() {
-  const params = new URLSearchParams(window.location.search);
-  const shot = params.get('shot');
-  if (shot === null) return;
-  DKState.frozen = true;
-  if (shot === 'start') {
-    DKState.screen = 'title';
-    DKState.orders = [makeShotOrder(1, 'nasi-goreng', 0.85), makeShotOrder(2, 'mie-ayam', 0.6)];
-    DKState.coins = 0;
-    DKState.served = 0;
-    DKState.strikes = 0;
-    DKState.combo = 0;
+function stageShot(name) {
+  const s = game.state;
+  s.frozen = true;
+  s.shotTime = 1.6;
+  if (name === 'start') {
+    s.screen = 'title';
     return;
   }
-  if (shot === 'play') {
-    DKState.screen = 'playing';
-    DKState.time = 20000;
-    DKState.coins = 45;
-    DKState.served = 4;
-    DKState.strikes = 0;
-    DKState.combo = 2;
-    DKState.bestCombo = 3;
-    DKState.orders = [
-      makeShotOrder(3, 'nasi-goreng', 0.72),
-      makeShotOrder(4, 'mie-ayam', 0.45),
-      makeShotOrder(5, 'sate-ayam', 0.28),
+  startDay(s);
+  s.frozen = true;
+  s.shotTime = 1.6;
+  if (name === 'play') {
+    // Mid-play: both stations busy, two ingredients plated, hand holds kecap.
+    s.coins = 45;
+    s.served = 4;
+    s.combo = 2;
+    s.bestCombo = 3;
+    s.time = 20;
+    s.orders = [
+      { id: 3, recipe: recipeById('nasi-goreng'), patience: 34, patienceMax: 45 },
+      { id: 4, recipe: recipeById('mie-ayam'), patience: 21, patienceMax: 40 },
+      { id: 5, recipe: recipeById('sate-ayam'), patience: 13, patienceMax: 35 },
     ];
-    // One dish mid-assembly: rice and chicken already on the plate,
-    // kecap still in hand; ice is being chopped, noodles on the stove.
-    DKState.plate = [{ id: 'rice' }, { id: 'chicken' }];
-    DKState.hand = { id: 'kecap', ready: true };
-    DKState.board = { busy: { item: { id: 'ice', ready: false }, endsAt: 21100 }, done: null };
-    DKState.stove = { busy: { item: { id: 'noodle', ready: false }, endsAt: 21600 }, done: null };
-    DKState.message = 'Nasi Goreng hampir jadi!';
-    DKState.messageAt = 20000;
-    // The carried kecap shows in hand, halfway to the plate.
-    DKMouse.x = 600;
-    DKMouse.y = 380;
-    return;
-  }
-  if (shot === 'serve') {
-    DKState.screen = 'playing';
-    DKState.time = 34000;
-    DKState.coins = 80;
-    DKState.served = 7;
-    DKState.strikes = 0;
-    DKState.combo = 3;
-    DKState.bestCombo = 4;
-    DKState.orders = [makeShotOrder(8, 'nasi-goreng', 0.55), makeShotOrder(9, 'es-teh', 0.8)];
-    // The full Nasi Goreng on the plate, matching order #8.
-    DKState.plate = [{ id: 'rice' }, { id: 'chicken' }, { id: 'kecap' }];
-    DKState.hand = null;
-    DKState.board = { busy: null, done: null };
-    DKState.stove = { busy: null, done: null };
-    DKState.message = 'Siap disajikan!';
-    DKState.messageAt = 34000;
-    return;
-  }
-  if (shot === 'end') {
-    DKState.screen = 'complete';
-    DKState.time = 514000;
-    DKState.coins = 210;
-    DKState.served = 12;
-    DKState.strikes = 1;
-    DKState.combo = 0;
-    DKState.bestCombo = 5;
-    DKState.orders = [];
-    DKState.plate = [];
-    DKState.hand = null;
-    DKState.board = { busy: null, done: null };
-    DKState.stove = { busy: null, done: null };
+    s.nextOrderId = 6;
+    s.stations.talenan = { ing: 'es', progress: 0.5, duration: 2.0, done: false };
+    s.stations.kompor = { ing: 'mie', progress: 0.6, duration: 3.2, done: false };
+    s.plate = ['nasi', 'ayam'];
+    s.hand = { id: 'kecap', processed: true };
+    game.input.mouse = { x: 590, y: 345 };
+    s.message = 'Nasi Goreng hampir jadi!';
+  } else if (name === 'serve') {
+    s.coins = 80;
+    s.served = 7;
+    s.combo = 3;
+    s.bestCombo = 4;
+    s.time = 34;
+    s.orders = [
+      { id: 8, recipe: recipeById('nasi-goreng'), patience: 23, patienceMax: 45 },
+      { id: 9, recipe: recipeById('es-teh'), patience: 34, patienceMax: 45 },
+      { id: 10, recipe: recipeById('mie-ayam'), patience: 30, patienceMax: 40 },
+    ];
+    s.nextOrderId = 11;
+    s.plate = ['nasi', 'ayam', 'kecap'];
+    s.hand = null;
+    s.message = 'Siap disajikan!';
+    s.floats = [{ x: 880, y: 130, text: '+Rp 24', life: 1.2, max: 1.2 }];
+  } else if (name === 'end') {
+    s.coins = 210;
+    s.served = 12;
+    s.combo = 5;
+    s.bestCombo = 5;
+    s.time = 514;
+    s.strikes = 1;
+    s.screen = 'dayComplete';
   }
 }

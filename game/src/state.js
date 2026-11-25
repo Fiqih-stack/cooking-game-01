@@ -1,215 +1,255 @@
-// Dapur Kilat — state and rules.
-// One job: orders, hand, stations, plate, coins and the day's progress.
-// Drawing lives in render.js, input in input.js, the loop in main.js.
+// Dapur Kilat v2 — pure game logic. No DOM, no canvas, no timers of its own.
+// Every function here is testable in Node: state in, state out.
 
-const DKState = {
-  screen: 'title', // 'title' | 'playing' | 'paused' | 'complete' | 'gameover'
-  time: 0, // ms since the shift started
-  coins: 0,
-  served: 0,
-  strikes: 0,
-  combo: 0,
-  bestCombo: 0,
-  orders: [], // { id, recipeId, patience, maxPatience }
-  nextOrderId: 1,
-  nextOrderIn: 0,
-  hand: null, // { id, ready } — the one item being carried
-  board: { busy: null, done: null }, // cutting board: { item, endsAt } / finished item
-  stove: { busy: null, done: null }, // stove, same shape
-  plate: [], // placed items: [{ id }] — every one of them ready
-  message: '',
-  messageAt: 0,
-  frozen: false, // shot mode: the scene is set and time does not advance
-};
+import { TIMINGS, DAY, INGREDIENTS, RECIPES } from './config.js';
 
-function showMessage(text) {
-  DKState.message = text;
-  DKState.messageAt = DKState.time;
+export function createGame(rng = Math.random) {
+  return {
+    screen: 'title', // title | playing | paused | dayComplete | gameOver
+    frozen: false, // staged screenshots freeze time
+    shotTime: 0, // fixed clock for frozen frames (steam, pulses)
+    time: 0, // elapsed shift time in seconds
+    coins: 0,
+    served: 0,
+    strikes: 0,
+    combo: 0,
+    bestCombo: 0,
+    orders: [], // { id, recipe, patience, patienceMax }
+    nextOrderId: 1,
+    refillTimer: 0,
+    hand: null, // { id, processed } held in the hand, or null
+    stations: { talenan: null, kompor: null }, // { ing, progress, duration, done }
+    plate: [], // ingredient ids arranged on the plate
+    message: 'Selamat datang di Dapur Kilat!',
+    floats: [], // floating "+Rp" texts: { x, y, text, life, max }
+    rng,
+  };
 }
 
-function resetGame() {
-  DKState.screen = 'playing';
-  DKState.time = 0;
-  DKState.coins = 0;
-  DKState.served = 0;
-  DKState.strikes = 0;
-  DKState.combo = 0;
-  DKState.bestCombo = 0;
-  DKState.orders = [];
-  DKState.nextOrderId = 1;
-  DKState.nextOrderIn = DK_CONFIG.orderEveryMs;
-  DKState.hand = null;
-  DKState.board = { busy: null, done: null };
-  DKState.stove = { busy: null, done: null };
-  DKState.plate = [];
-  DKState.message = '';
-  DKState.messageAt = 0;
-  DKState.frozen = false;
-  spawnOrder();
-  spawnOrder();
+export function startDay(state) {
+  state.screen = 'playing';
+  state.frozen = false;
+  state.time = 0;
+  state.coins = 0;
+  state.served = 0;
+  state.strikes = 0;
+  state.combo = 0;
+  state.bestCombo = 0;
+  state.orders = [];
+  state.nextOrderId = 1;
+  state.refillTimer = 0;
+  state.hand = null;
+  state.stations = { talenan: null, kompor: null };
+  state.plate = [];
+  state.floats = [];
+  state.message = 'Ambil bahan dari meja, olah, lalu sajikan!';
+  for (let i = 0; i < DAY.maxActiveOrders; i++) spawnOrder(state);
 }
 
-function patienceForOrder() {
-  const p = DK_CONFIG.patienceMs - DKState.served * DK_CONFIG.patienceStepMs;
-  return Math.max(DK_CONFIG.patienceMinMs, p);
-}
-
-function spawnOrder() {
-  if (DKState.orders.length >= DK_CONFIG.maxActiveOrders) return;
-  const recipe = DK_RECIPES[Math.floor(Math.random() * DK_RECIPES.length)];
-  const patience = patienceForOrder();
-  DKState.orders.push({
-    id: DKState.nextOrderId++,
-    recipeId: recipe.id,
-    patience,
-    maxPatience: patience,
+export function spawnOrder(state) {
+  const recipe = RECIPES[Math.floor(state.rng() * RECIPES.length)];
+  const patienceMax = Math.max(
+    TIMINGS.patienceMin,
+    TIMINGS.patienceStart - state.served * TIMINGS.patienceStep,
+  );
+  state.orders.push({
+    id: state.nextOrderId++,
+    recipe,
+    patience: patienceMax,
+    patienceMax,
   });
 }
 
-// The counter shows the ingredients the active orders need, first seen
-// first, at most six — the six number keys pick them in this order.
-function currentCounterSlots() {
-  const seen = [];
-  for (const order of DKState.orders) {
-    const recipe = recipeById(order.recipeId);
-    for (const id of recipe.needs) {
-      if (!seen.includes(id)) seen.push(id);
+export function tickState(state, dt) {
+  if (state.screen !== 'playing' || state.frozen) return;
+  state.time += dt;
+
+  // Patience drains; an order that runs out is a strike.
+  for (const order of [...state.orders]) {
+    order.patience -= dt;
+    if (order.patience <= 0) expireOrder(state, order);
+  }
+
+  // Stations finish their work.
+  for (const key of ['talenan', 'kompor']) {
+    const job = state.stations[key];
+    if (job && !job.done) {
+      job.progress += dt / job.duration;
+      if (job.progress >= 1) {
+        job.progress = 1;
+        job.done = true;
+      }
     }
   }
-  return seen.slice(0, 6);
+
+  // Refill empty order slots.
+  if (state.orders.length < DAY.maxActiveOrders) {
+    state.refillTimer += dt;
+    if (state.refillTimer >= TIMINGS.orderRefill) {
+      state.refillTimer = 0;
+      spawnOrder(state);
+    }
+  }
+
+  // Floating texts rise and fade.
+  for (const f of state.floats) {
+    f.life -= dt;
+    f.y -= 22 * dt;
+  }
+  state.floats = state.floats.filter((f) => f.life > 0);
 }
 
-function pickIngredient(id) {
-  if (DKState.screen !== 'playing' || DKState.hand !== null) return false;
-  if (!currentCounterSlots().includes(id)) return false;
-  const ing = DK_INGREDIENTS[id];
-  DKState.hand = { id, ready: ing.station === 'ready' };
+export function expireOrder(state, order) {
+  state.orders = state.orders.filter((o) => o.id !== order.id);
+  state.strikes += 1;
+  state.combo = 0;
+  state.message = `Pesanan #${order.id} ${order.recipe.name} hangus!`;
+  if (state.strikes >= DAY.maxStrikes) {
+    state.screen = 'gameOver';
+    state.message = 'Shift berakhir — 3 pesanan hangus.';
+  }
+}
+
+export function pickIngredient(state, ingId) {
+  if (state.hand) {
+    state.message = 'Tangan penuh — letakkan dulu bahan di tangan.';
+    return false;
+  }
+  // Ready ('siap') ingredients are already processed; the rest need a station.
+  state.hand = { id: ingId, processed: INGREDIENTS[ingId].station === 'siap' };
   return true;
 }
 
-function stationOf(kind) {
-  return kind === 'board' ? DKState.board : DKState.stove;
+// What the plate currently matches, if anything.
+export function matchingOrder(state) {
+  if (state.plate.length === 0) return null;
+  const plateSet = [...state.plate].sort().join(',');
+  for (const order of state.orders) {
+    const need = [...order.recipe.ingredients].sort().join(',');
+    if (plateSet === need) return order;
+  }
+  return null;
 }
 
-function stationDuration(kind) {
-  return kind === 'board' ? DK_CONFIG.chopMs : DK_CONFIG.cookMs;
+// The tip rewards a fast serve; the combo multiplier uses the streak BEFORE
+// this serve (so the first serve of a streak pays at 1x, the next at 1.1x…).
+export function orderEarned(state, order) {
+  const tip = Math.round(DAY.tipMax * (order.patience / order.patienceMax));
+  const mult = 1 + Math.min(state.combo * DAY.comboStep, DAY.comboCap);
+  return Math.round((order.recipe.base + tip) * mult);
 }
 
-// Click a station: start processing the carried item, or collect a
-// finished one. Returns true when the click did something.
-function clickStation(kind) {
-  if (DKState.screen !== 'playing') return false;
-  const station = stationOf(kind);
-  if (station.done !== null && DKState.hand === null) {
-    DKState.hand = station.done;
-    station.done = null;
-    return true;
-  }
-  if (station.busy !== null) {
-    showMessage('Masih diproses — tunggu sebentar.');
+export function tryServe(state) {
+  const order = matchingOrder(state);
+  if (!order) {
+    state.message = 'Piring belum cocok dengan pesanan mana pun.';
     return false;
   }
-  if (DKState.hand === null) return false;
-  const ing = DK_INGREDIENTS[DKState.hand.id];
-  if (ing.station !== kind || DKState.hand.ready) {
-    showMessage('Bahan ini tidak butuh ' + (kind === 'board' ? 'talenan' : 'kompor') + '.');
-    return false;
+  const earned = orderEarned(state, order);
+  state.coins += earned;
+  state.served += 1;
+  state.combo += 1;
+  state.bestCombo = Math.max(state.bestCombo, state.combo);
+  state.orders = state.orders.filter((o) => o.id !== order.id);
+  state.plate = [];
+  state.floats.push({ x: 752, y: 210, text: `+Rp ${earned}`, life: 1.2, max: 1.2 });
+  state.message = `Disajikan! +Rp ${earned} — ${order.recipe.name}.`;
+  if (state.served >= DAY.ordersToServe) {
+    state.screen = 'dayComplete';
+    state.message = 'Semua 12 pesanan tersaji. Hari selesai!';
   }
-  station.busy = { item: DKState.hand, endsAt: DKState.time + stationDuration(kind) };
-  DKState.hand = null;
   return true;
 }
 
-// Click the plate: place a ready item on it, or take the last one back.
-function clickPlate() {
-  if (DKState.screen !== 'playing') return false;
-  if (DKState.hand !== null) {
-    if (!DKState.hand.ready) {
-      showMessage('Olahan dulu bahannya sebelum ditaruh di piring.');
+export function clickStation(state, stationId) {
+  const job = state.stations[stationId];
+  if (job) {
+    if (!job.done) {
+      state.message = 'Masih diproses — tunggu sebentar.';
       return false;
     }
-    DKState.plate.push({ id: DKState.hand.id });
-    DKState.hand = null;
+    if (state.hand) {
+      state.message = 'Tangan penuh — letakkan dulu bahan di tangan.';
+      return false;
+    }
+    state.hand = { id: job.ing, processed: true };
+    state.stations[stationId] = null;
+    state.message = `${INGREDIENTS[job.ing].name} sudah siap!`;
     return true;
   }
-  if (DKState.plate.length > 0) {
-    DKState.hand = DKState.plate.pop();
+  if (!state.hand) {
+    state.message = 'Ambil bahan dulu dari meja.';
+    return false;
+  }
+  if (state.hand.processed) {
+    state.message = `${INGREDIENTS[state.hand.id].name} sudah siap — langsung taruh di piring.`;
+    return false;
+  }
+  const ing = INGREDIENTS[state.hand.id];
+  if (ing.station !== stationId) {
+    if (ing.station === 'talenan') {
+      state.message = `${ing.name} perlu dipotong di talenan.`;
+    } else {
+      state.message = `${ing.name} perlu dimasak di kompor.`;
+    }
+    return false;
+  }
+  state.stations[stationId] = {
+    ing: state.hand.id,
+    progress: 0,
+    duration: TIMINGS[stationId],
+    done: false,
+  };
+  state.hand = null;
+  return true;
+}
+
+// Clicking the plate places the held ingredient, or picks one back up.
+export function clickPlate(state, index = -1) {
+  if (state.hand) {
+    const ing = INGREDIENTS[state.hand.id];
+    if (!state.hand.processed) {
+      state.message = `${ing.name} masih mentah — olah dulu di ${ing.label.toLowerCase()}.`;
+      return false;
+    }
+    if (state.plate.includes(state.hand.id)) {
+      state.message = `${ing.name} sudah ada di piring.`;
+      return false;
+    }
+    const needed = state.orders.some((o) => o.recipe.ingredients.includes(state.hand.id));
+    if (!needed) {
+      state.message = `Tidak ada pesanan yang butuh ${ing.name} sekarang.`;
+      return false;
+    }
+    state.plate.push(state.hand.id);
+    state.hand = null;
+    const match = matchingOrder(state);
+    if (match) state.message = `${match.recipe.name} hampir jadi!`;
+    return true;
+  }
+  if (index >= 0 && index < state.plate.length) {
+    // Plated ingredients are always processed, so they go back ready to place.
+    state.hand = { id: state.plate[index], processed: true };
+    state.plate.splice(index, 1);
     return true;
   }
   return false;
 }
 
-function clearPlate() {
-  if (DKState.screen !== 'playing' || DKState.plate.length === 0) return false;
-  DKState.plate = [];
-  showMessage('Piring dikosongkan.');
-  return true;
-}
-
-// The first order whose recipe matches exactly what the plate holds.
-function matchingOrder() {
-  const plateIds = DKState.plate.map((p) => p.id).sort().join(',');
-  for (const order of DKState.orders) {
-    const recipe = recipeById(order.recipeId);
-    if ([...recipe.needs].sort().join(',') === plateIds) return order;
-  }
-  return null;
-}
-
-function serveOrder(order) {
-  if (DKState.screen !== 'playing' || order === null) return false;
-  const recipe = recipeById(order.recipeId);
-  const left = order.patience / order.maxPatience;
-  const tip = Math.round(DK_CONFIG.tipMax * left) + Math.min(DKState.combo, 5) * 2;
-  const earned = DK_CONFIG.baseCoins + tip;
-  DKState.coins += earned;
-  DKState.served += 1;
-  DKState.combo += 1;
-  DKState.bestCombo = Math.max(DKState.bestCombo, DKState.combo);
-  DKState.orders = DKState.orders.filter((o) => o.id !== order.id);
-  DKState.plate = [];
-  // A replacement ticket arrives within 3 s, so the board stays full.
-  DKState.nextOrderIn = Math.min(DKState.nextOrderIn, 3000);
-  showMessage(recipe.name + ' tersaji! +' + earned + ' koin.');
-  if (DKState.served >= DK_CONFIG.ordersToWin) {
-    DKState.screen = 'complete';
-  }
-  return true;
-}
-
-function serveFirstMatch() {
-  return serveOrder(matchingOrder());
-}
-
-function failOrder(order) {
-  DKState.orders = DKState.orders.filter((o) => o.id !== order.id);
-  DKState.strikes += 1;
-  DKState.combo = 0;
-  showMessage('Pesanan hangus! Pelanggan pergi.');
-  if (DKState.strikes >= DK_CONFIG.maxStrikes) {
-    DKState.screen = 'gameover';
-  }
-}
-
-// Advance timers, stations, order spawns and patience. dt is milliseconds.
-function updateGame(dt) {
-  if (DKState.screen !== 'playing' || DKState.frozen) return;
-  DKState.time += dt;
-  DKState.nextOrderIn -= dt;
-  if (DKState.nextOrderIn <= 0) {
-    spawnOrder();
-    DKState.nextOrderIn = DK_CONFIG.orderEveryMs;
-  }
-  for (const station of [DKState.board, DKState.stove]) {
-    if (station.busy !== null && DKState.time >= station.busy.endsAt) {
-      station.done = { id: station.busy.item.id, ready: true };
-      station.busy = null;
+// The six counter cards: ingredients the active orders need first (most
+// urgent order first), topped up from the pantry so the row is always full.
+export function counterIngredients(state) {
+  const urgent = [...state.orders].sort((a, b) => a.patience - b.patience);
+  const list = [];
+  for (const order of urgent) {
+    for (const ing of order.recipe.ingredients) {
+      if (!list.includes(ing)) list.push(ing);
     }
   }
-  const failed = [];
-  for (const order of DKState.orders) {
-    order.patience -= dt;
-    if (order.patience <= 0) failed.push(order);
+  const pantry = ['nasi', 'ayam', 'kecap', 'mie', 'kaldu', 'sate', 'teh', 'es', 'gula', 'kacang'];
+  for (const ing of pantry) {
+    if (list.length >= 6) break;
+    if (!list.includes(ing)) list.push(ing);
   }
-  for (const order of failed) failOrder(order);
+  return list.slice(0, 6);
 }
