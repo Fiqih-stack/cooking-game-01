@@ -1,14 +1,16 @@
-// Dapur Kilat v18 — state & logika game.
+// Dapur Kilat v19 — state & logika game.
 // Alur: ambil bahan di meja -> olah di stasiun (talenan/kompor) atau
 // langsung ke piring (bahan 'siap') -> rakit di piring -> sajikan.
-// v18: C2 Jam Sibuk RUSH! (order cepat + tip +2); C3 Menu Spesial (+Rp 2).
-// v17: 7 hidangan (Mie Goreng Spesial baru); bonus "SEMPURNA!" (v14)
-// dipertahankan; S1 Pesanan VIP (tiket emas, 2x harga dasar).
+// v19: S1 Toko Upgrade Stasiun; S2 Pesanan Paket (2 hidangan, 1 tiket);
+// S3 partikel koin + rincian bayaran; S5 RUSH tiap 30 dtk;
+// S6 efek Cling (kilau saat saji + order baru fresh).
+// v18: RUSH, SPESIAL (+Rp 2), kilau kombo >= 3.
+// v17: 7 hidangan; bonus "SEMPURNA!" (v14); Pesanan VIP (2x).
 // PENTING (pelajaran v12): s.prepared mencatat bahan yang sudah lewat
 // stasiun — hanya bahan 'siap' ATAU yang ada di s.prepared boleh ditaruh
 // di piring. Tanpa ini, bahan matang ditolak dari piring (bug v12).
 
-import { DISHES, INGREDIENTS, RULES, STATIONS } from './config.js';
+import { DISHES, INGREDIENTS, RULES, STATIONS, UPGRADE_COSTS, UPGRADE_MAX, UPGRADE_TIMES } from './config.js';
 
 export function createState(opts = {}) {
   const s = {
@@ -19,7 +21,7 @@ export function createState(opts = {}) {
     combo: 0,
     strikes: 0,
     patience: RULES.patienceStart,
-    orders: [], // { dish, patience, max, vip, special }
+    orders: [], // { dish, patience, max, vip, special, paket, freshT }
     orderTimer: 0,
     hand: null, // id bahan di tangan
     plate: [], // id bahan yang sudah diolah, di piring
@@ -38,6 +40,14 @@ export function createState(opts = {}) {
     rushNext: RULES.rushEvery, // hitung mundur menuju RUSH berikutnya
     // v18 C3: Menu Spesial Hari Ini (dipilih acak di startGame).
     specialDish: null,
+    // v19 S1: level upgrade stasiun (0..2).
+    upg: { talenan: 0, kompor: 0 },
+    // v19 S3: partikel koin yang terbang saat saji.
+    coinFx: [], // { x, y, vx, vy, t, life }
+    // v19 S6: sparkle Cling saat saji.
+    sparkles: [], // { x, y, r, rot, vr, t, life }
+    // v19 S3: rincian bayaran saji terakhir.
+    breakdown: '',
   };
   return s;
 }
@@ -52,24 +62,81 @@ function nextDish(s) {
   return keys[Math.floor(Math.random() * keys.length)];
 }
 
-// Harga yang tampil di tiket & dipakai sebagai dasar bayaran serve:
-// harga dasar, +2 bila order SPESIAL (v18 C3), digandakan bila VIP (v17 S1).
-// VIP spesial = (base + 2) * 2.
+// v19 S1: waktu olah stasiun menurut level upgrade.
+export function stationTime(s, name) {
+  const lv = s.upg ? s.upg[name] : 0;
+  return UPGRADE_TIMES[name][Math.min(lv, UPGRADE_MAX)];
+}
+
+// v19 S1: beli upgrade stasiun. Kembalikan true bila berhasil.
+export function buyUpgrade(s, name) {
+  if (s.screen !== 'main' || s.paused) return false;
+  const lv = s.upg[name];
+  if (lv >= UPGRADE_MAX) { setMessage(s, STATIONS[name].name + ' sudah maksimal (Lv' + UPGRADE_MAX + ').'); return false; }
+  const cost = UPGRADE_COSTS[name][lv];
+  if (s.coins < cost) { setMessage(s, 'Koin kurang! ' + STATIONS[name].name + ' Lv' + (lv + 1) + ' butuh Rp ' + cost + '.'); return false; }
+  s.coins -= cost;
+  s.upg[name] = lv + 1;
+  setMessage(s, '⚡ ' + STATIONS[name].name + ' naik ke Lv' + (lv + 1) + '! Masak lebih cepat (' + UPGRADE_TIMES[name][lv + 1] + ' dtk).');
+  return true;
+}
+
+// Daftar bahan yang wajib ada di piring untuk order ini.
+// Paket: union (unik) bahan kedua hidangan.
+export function requiredIngredients(order) {
+  if (order.paket) {
+    const seen = {};
+    const out = [];
+    for (const d of order.paket) {
+      for (const id of DISHES[d].ingredients) {
+        if (!seen[id]) { seen[id] = true; out.push(id); }
+      }
+    }
+    return out;
+  }
+  return DISHES[order.dish].ingredients;
+}
+
+// Harga yang tampil di tiket & dipakai sebagai dasar bayaran serve.
+// v19 S2 paket: jumlah dasar kedua hidangan + bonus paket; SPESIAL +2
+// bila salah satu hidangan paket = spesial hari ini (sekali saja);
+// VIP menggandakan total.
 export function orderPrice(order) {
-  const dish = DISHES[order.dish];
-  let p = dish.base;
+  let p;
+  if (order.paket) {
+    p = DISHES[order.paket[0]].base + DISHES[order.paket[1]].base + RULES.paketBonus;
+  } else {
+    p = DISHES[order.dish].base;
+  }
   if (order.special) p += RULES.specialBonus;
   return p * (order.vip ? RULES.vipMultiplier : 1);
 }
 
 export function spawnOrder(s) {
   if (s.orders.length >= RULES.ordersMax) return false;
-  const dish = nextDish(s);
+  // v19 S2: 15% peluang jadi PAKET (2 hidangan berbeda).
+  let paket = null;
+  let dish;
+  if (Math.random() < RULES.paketChance) {
+    const keys = Object.keys(DISHES);
+    const a = keys[Math.floor(Math.random() * keys.length)];
+    let b = keys[Math.floor(Math.random() * keys.length)];
+    let guard = 0;
+    while (b === a && guard < 20) { b = keys[Math.floor(Math.random() * keys.length)]; guard++; }
+    paket = [a, b];
+    dish = a;
+  } else {
+    dish = nextDish(s);
+  }
   // v17 S1: 25% peluang jadi Pesanan VIP (tiket emas, bayar 2x).
   const vip = Math.random() < RULES.vipChance;
-  // v18 C3: order spesial bila hidangannya = spesial hari ini.
-  const special = dish === s.specialDish;
-  s.orders.push({ dish, patience: s.patience, max: s.patience, vip, special });
+  // v18 C3: order spesial bila hidangannya = spesial hari ini
+  // (paket: bila salah satu hidangannya spesial).
+  const special = paket
+    ? (paket[0] === s.specialDish || paket[1] === s.specialDish)
+    : (dish === s.specialDish);
+  // v19 S6: order baru fresh (kilau emas) selama freshSeconds.
+  s.orders.push({ dish, patience: s.patience, max: s.patience, vip, special, paket, freshT: RULES.freshSeconds });
   return true;
 }
 
@@ -98,6 +165,11 @@ export function startGame(s) {
   s.rushNext = RULES.rushEvery;
   const keys = Object.keys(DISHES);
   s.specialDish = keys[Math.floor(Math.random() * keys.length)];
+  // v19: reset upgrade, partikel, sparkle, rincian.
+  s.upg = { talenan: 0, kompor: 0 };
+  s.coinFx = [];
+  s.sparkles = [];
+  s.breakdown = '';
   spawnOrder(s);
   spawnOrder(s);
   spawnOrder(s);
@@ -116,6 +188,7 @@ export function pickIngredient(s, id) {
 
 // Pakai stasiun: mulai olah (bila kosong & tangan pegang bahan mentah),
 // atau ambil hasil (bila selesai). Bahan 'siap' tidak bisa masuk stasiun.
+// v19 S1: total waktu olah = stationTime (menurut level upgrade).
 export function useStation(s, name) {
   if (s.screen !== 'main' || s.paused) return false;
   const st = s.stations[name];
@@ -140,7 +213,7 @@ export function useStation(s, name) {
     setMessage(s, ing.label + ' diolah di ' + STATIONS[ing.station].name + ', bukan di ' + STATIONS[name].name + '.');
     return false;
   }
-  s.stations[name] = { item: s.hand, t: 0, total: STATIONS[name].time };
+  s.stations[name] = { item: s.hand, t: 0, total: stationTime(s, name) };
   s.hand = null;
   return true;
 }
@@ -165,20 +238,49 @@ export function placeOnPlate(s) {
   return true;
 }
 
-// Cari order yang cocok dengan isi piring (semua bahan hidangan ada).
+// Cari order yang cocok dengan isi piring (semua bahan wajib ada).
 export function findMatchingOrder(s) {
   for (let i = 0; i < s.orders.length; i++) {
-    const dish = DISHES[s.orders[i].dish];
-    if (dish.ingredients.length !== s.plate.length) continue;
-    if (dish.ingredients.every((id) => s.plate.includes(id))) return i;
+    const req = requiredIngredients(s.orders[i]);
+    if (req.length !== s.plate.length) continue;
+    if (req.every((id) => s.plate.includes(id))) return i;
   }
   return -1;
+}
+
+// v19 S3: spawn partikel koin (terbang ke header) + S6 sparkle Cling.
+function spawnServeFx(s) {
+  const cx = 752, cy = 188;
+  for (let i = 0; i < RULES.coinFxCount; i++) {
+    const a = -Math.PI / 2 + (Math.random() - 0.5) * 1.6;
+    const sp = 260 + Math.random() * 220;
+    s.coinFx.push({
+      x: cx + (Math.random() - 0.5) * 40,
+      y: cy + (Math.random() - 0.5) * 20,
+      vx: Math.cos(a) * sp - 120,
+      vy: Math.sin(a) * sp,
+      t: 0.8, life: 0.8,
+    });
+  }
+  for (let i = 0; i < RULES.clingCount; i++) {
+    const a = (i / RULES.clingCount) * Math.PI * 2 + Math.random() * 0.5;
+    const r = 30 + Math.random() * 70;
+    s.sparkles.push({
+      x: cx + Math.cos(a) * r,
+      y: cy + Math.sin(a) * r * 0.7,
+      r: 6 + Math.random() * 8,
+      rot: Math.random() * Math.PI,
+      vr: (Math.random() - 0.5) * 3,
+      t: 0.9, life: 0.9,
+    });
+  }
 }
 
 // Sajikan: orderIdx -1 = cari otomatis; >=0 = tiket tertentu.
 // v14: saji SEMPURNA bila kesabaran >75% — bonus +Rp 3 + teks "SEMPURNA!".
 // v17 S1: order VIP membayar 2x harga dasar (effectiveBase).
 // v18 C2: tip +2 saat RUSH aktif. C3: effectiveBase sudah termasuk +2 spesial.
+// v19 S2: paket membayar jumlah dasar + bonus paket. S3: rincian bayaran.
 export function serve(s, orderIdx = -1) {
   if (s.screen !== 'main' || s.paused) return false;
   if (s.plate.length === 0) { setMessage(s, 'Piring kosong! Rakit hidangan dulu.'); return false; }
@@ -190,8 +292,8 @@ export function serve(s, orderIdx = -1) {
   }
   const order = s.orders[idx];
   const dish = DISHES[order.dish];
-  // Harga: effectiveBase (2x bila VIP, +2 bila SPESIAL) + tip kecepatan
-  // (+2 bila RUSH) + bonus kombo + bonus SEMPURNA!
+  // Harga: effectiveBase (2x bila VIP, +2 bila SPESIAL, paket = jumlah+5)
+  // + tip kecepatan (+2 bila RUSH) + bonus kombo + bonus SEMPURNA!
   const effectiveBase = orderPrice(order);
   const frac = Math.max(0, order.patience / order.max);
   const tip = Math.round(RULES.tipMax * frac) + (s.rushActive ? RULES.rushTipBonus : 0);
@@ -204,15 +306,24 @@ export function serve(s, orderIdx = -1) {
   s.combo += 1;
   s.floatText = { text: '+Rp ' + total, t: 1.2 };
   s.perfect = isPerfect ? { text: 'SEMPURNA!', t: 1.5 } : null;
+  // v19 S3: rincian bayaran (hanya bagian yang > 0).
+  const parts = [effectiveBase + ' dasar'];
+  if (tip > 0) parts.push(tip + ' tip' + (s.rushActive ? ' (RUSH +2)' : ''));
+  if (comboBonus > 0) parts.push(comboBonus + ' kombo');
+  if (perfectBonus > 0) parts.push(perfectBonus + ' SEMPURNA!');
+  s.breakdown = parts.join(' + ') + ' = Rp ' + total + (order.vip ? ' (VIP x2)' : '') + (order.paket ? ' (PAKET)' : '');
   s.orders.splice(idx, 1);
   s.plate = [];
   s.prepared = {};
   s.patience = Math.max(RULES.patienceMin, s.patience - RULES.patienceStep);
   const vipPrefix = order.vip ? 'VIP! ' : '';
   const rushPrefix = s.rushActive ? 'RUSH! ' : '';
+  const paketLabel = order.paket ? 'PAKET ' : '';
   setMessage(s, isPerfect
-    ? 'SEMPURNA! ' + vipPrefix + rushPrefix + dish.label + ' disajikan! +Rp ' + total + '.'
-    : vipPrefix + rushPrefix + dish.label + ' disajikan! +Rp ' + total + '.');
+    ? 'SEMPURNA! ' + vipPrefix + rushPrefix + paketLabel + dish.label + ' disajikan! +Rp ' + total + '.'
+    : vipPrefix + rushPrefix + paketLabel + dish.label + ' disajikan! +Rp ' + total + '.');
+  // v19 S3 + S6: partikel koin + sparkle Cling.
+  spawnServeFx(s);
   if (s.served >= RULES.servesToWin) {
     s.screen = 'win';
     setMessage(s, 'Hari selesai! Total Rp ' + s.coins + '.');
@@ -237,8 +348,28 @@ export function tick(s, dt) {
     s.perfect.t -= dt;
     if (s.perfect.t <= 0) s.perfect = null;
   }
+  // v19 S3/S6: partikel koin + sparkle Cling bergerak & memudar.
+  for (let i = s.coinFx.length - 1; i >= 0; i--) {
+    const p = s.coinFx[i];
+    p.x += p.vx * dt;
+    p.y += p.vy * dt;
+    p.vy += 160 * dt;
+    p.t -= dt;
+    if (p.t <= 0) s.coinFx.splice(i, 1);
+  }
+  for (let i = s.sparkles.length - 1; i >= 0; i--) {
+    const p = s.sparkles[i];
+    p.rot += p.vr * dt;
+    p.t -= dt;
+    if (p.t <= 0) s.sparkles.splice(i, 1);
+  }
+  // v19 S6: kilau fresh order baru berkurang.
+  for (const o of s.orders) {
+    if (o.freshT > 0) o.freshT = Math.max(0, o.freshT - dt);
+  }
   // v18 C2: Jam Sibuk RUSH! — mesin waktu: hitung mundur menuju RUSH,
   // lalu hitung mundur durasi RUSH, lalu kembali menunggu RUSH berikutnya.
+  // v19 S5: rushEvery 30 dtk.
   if (s.rushActive) {
     s.rushTimer -= dt;
     if (s.rushTimer <= 0) {

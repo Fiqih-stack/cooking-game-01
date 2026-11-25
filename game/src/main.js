@@ -1,30 +1,29 @@
-// Dapur Kilat v18 — loop utama & titik masuk.
-// Render tiap frame; tick logika dengan delta waktu.
-
-import { LAYOUT } from './config.js';
-import { setupInput } from './input.js';
-import { render } from './render.js';
-import { applyShot, hasShot } from './shots.js';
+// Dapur Kilat v19 — main (loop game + wiring).
 import { createState, tick } from './state.js';
+import { render } from './render.js';
+import { setupInput } from './input.js';
+import { LAYOUT } from './config.js';
+import { applyShot } from './shots.js';
 
 const canvas = document.getElementById('game');
 const ctx = canvas.getContext('2d');
+const s = createState();
 
-const state = createState();
-
-// Preset screenshot (?shot=start|play|serve|end) untuk dossier.
+// Shot preset via query (?shot=start|play|serve|end) untuk screenshot.
 const params = new URLSearchParams(window.location.search);
 const shot = params.get('shot');
-if (shot && hasShot(shot)) applyShot(state, shot);
+if (shot) {
+  applyShot(s, shot);
+}
 
-setupInput(canvas, state, LAYOUT);
+setupInput(canvas, s, LAYOUT);
 
 let last = performance.now();
 function frame(now) {
   const dt = Math.min(0.1, (now - last) / 1000);
   last = now;
-  tick(state, dt);
-  render(ctx, state);
+  if (!s.paused) tick(s, dt);
+  render(ctx, s);
   requestAnimationFrame(frame);
 }
 requestAnimationFrame(frame);

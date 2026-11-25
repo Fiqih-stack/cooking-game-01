@@ -1,37 +1,14 @@
-// Dapur Kilat v18 — semua gambar digambar dengan kode canvas.
-// v18 (4 butir): C1 platting Nasi Goreng (2 tomat + 2 timun BERLAPIS di sisi);
-// C2 Jam Sibuk RUSH! (banner + tip +2 + order lebih cepat);
-// C3 Menu Spesial Hari Ini (pil SPESIAL + harga +2); C4 kilau emas kombo >= 3.
-// Dipertahankan dari v17: VIP (tiket emas, 2x), urgensi (denyut merah <10 dtk),
-// Mie Goreng Spesial, preview hidangan di tiket, saus Bolognese natural,
-// 2 minuman baru, counter 2 baris x 9 (SEMUA 18 bahan bisa diambil).
-// v14: SEMPURNA!, uap bergerak, udang + daging revisi, warna fresh,
-// spaghetti mentah rapat, nasgor nasi terlihat, spaghetti 10 loop tanpa rongga.
+// Dapur Kilat v19 — render (canvas 2D).
+// v19: S1 tombol upgrade di footer + Lv di panel stasiun; S2 tiket PAKET;
+// S3 partikel koin + rincian bayaran; S4 koki + latar dapur hidup;
+// S6 sparkle Cling + kilau fresh order baru.
+// Dipertahankan v18: VIP (tiket emas), urgensi <10 dtk, preview tiket,
+// SPESIAL (pil emas), kilau emas kombo >= 3, header oranye RUSH.
+// v17: preview hidangan di tiket. v15: counter 2x9. v14: SEMPURNA! + uap.
 
-import { COUNTER, DISHES, INGREDIENTS, KEY_LABELS, LAYOUT, RULES, counterCardRect } from './config.js';
-import { orderPrice } from './state.js';
+import { COUNTER, DISHES, INGREDIENTS, KEY_LABELS, LAYOUT, RULES, STATIONS, UPGRADE_COSTS, UPGRADE_MAX, UPGRADE_TIMES, counterCardRect } from './config.js';
+import { orderPrice, requiredIngredients, stationTime } from './state.js';
 
-// ---------- util kanvas ----------
-function shadow(ctx, color, blur, ox, oy) {
-  ctx.shadowColor = color;
-  ctx.shadowBlur = blur;
-  ctx.shadowOffsetX = ox;
-  ctx.shadowOffsetY = oy;
-}
-function noShadow(ctx) {
-  ctx.shadowColor = 'transparent';
-  ctx.shadowBlur = 0;
-  ctx.shadowOffsetX = 0;
-  ctx.shadowOffsetY = 0;
-}
-function circle(ctx, x, y, r) {
-  ctx.beginPath();
-  ctx.arc(x, y, r, 0, Math.PI * 2);
-}
-function ellipse(ctx, x, y, rx, ry, rot = 0) {
-  ctx.beginPath();
-  ctx.ellipse(x, y, rx, ry, rot, 0, Math.PI * 2);
-}
 function rr(ctx, x, y, w, h, r) {
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -42,1930 +19,891 @@ function rr(ctx, x, y, w, h, r) {
   ctx.closePath();
 }
 
-// Uap bergerak (v14): 2 lengkung uap yang naik-turun halus mengikuti waktu.
-// yOff = sin(time * 2.5) * 3 — game terasa hidup; screenshot tetap
-// deterministik (virtual-time-budget → s.time tetap).
-function drawSteam(ctx, cx, cy, s, time) {
-  const yOff = Math.sin(time * 2.5) * 3 * s;
-  ctx.strokeStyle = 'rgba(180,170,150,0.7)';
-  ctx.lineWidth = 1.6 * s;
-  ctx.beginPath();
-  ctx.moveTo(cx - 8 * s, cy - 30 * s + yOff);
-  ctx.quadraticCurveTo(cx - 11 * s, cy - 36 * s + yOff, cx - 8 * s, cy - 42 * s + yOff);
-  ctx.moveTo(cx + 6 * s, cy - 30 * s - yOff);
-  ctx.quadraticCurveTo(cx + 9 * s, cy - 36 * s - yOff, cx + 6 * s, cy - 42 * s - yOff);
-  ctx.stroke();
+function text(ctx, s, x, y, font, color, align = 'left', baseline = 'alphabetic') {
+  ctx.font = font;
+  ctx.fillStyle = color;
+  ctx.textAlign = align;
+  ctx.textBaseline = baseline;
+  ctx.fillText(s, x, y);
 }
 
-// ---------- gambar bahan (ikon kecil) ----------
-function drawNasi(ctx, cx, cy, s) {
-  // Mangkuk nasi putih: mangkuk biru + gundukan nasi putih berbutir.
-  shadow(ctx, 'rgba(0,0,0,0.2)', 4 * s, 0, 2 * s);
-  ctx.fillStyle = '#4a7fb5';
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 8 * s, 26 * s, 12 * s, 0, 0, Math.PI);
-  ctx.closePath();
-  ctx.fill();
-  noShadow(ctx);
-  ctx.fillStyle = '#f7f3e8';
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 2 * s, 24 * s, 12 * s, 0, Math.PI, 0);
-  ctx.closePath();
-  ctx.fill();
-  // Butir nasi (oval kecil, putih pucat) — tekstur lebih jelas.
-  ctx.fillStyle = '#fffdf6';
-  for (const [dx, dy, r] of [[-14, -4, 0.3], [-6, -8, -0.2], [2, -5, 0.4], [10, -8, -0.3], [16, -2, 0.2], [-2, 0, -0.4], [8, 1, 0.3]]) {
-    ctx.save();
-    ctx.translate(cx + dx * s, cy + dy * s);
-    ctx.rotate(r);
-    ctx.beginPath();
-    ctx.ellipse(0, 0, 4 * s, 2 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-  ctx.fillStyle = '#e8dcc8';
-  for (const [dx, dy] of [[-10, -2], [4, -8], [14, -6]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, 1.2 * s);
-    ctx.fill();
-  }
-  // Daun bawang hijau (hiasan).
-  ctx.fillStyle = '#3e9b4f';
-  ctx.fillRect(cx - 4 * s, cy - 8 * s, 5 * s, 2 * s);
-}
-
-function drawTelur(ctx, cx, cy, s) {
-  // Telur ceplok: putih organik + kuning mengilap (fresh, kuning cerah).
-  shadow(ctx, 'rgba(0,0,0,0.18)', 4 * s, 0, 2 * s);
-  ctx.fillStyle = '#fffdf6';
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 2 * s, 24 * s, 18 * s, 0.2, 0, Math.PI * 2);
-  ctx.fill();
-  noShadow(ctx);
-  ctx.fillStyle = '#fdf6e3';
-  ctx.beginPath();
-  ctx.ellipse(cx - 6 * s, cy + 6 * s, 12 * s, 8 * s, -0.3, 0, Math.PI * 2);
-  ctx.fill();
-  const g = ctx.createRadialGradient(cx - 2 * s, cy - 2 * s, 2 * s, cx, cy, 12 * s);
-  g.addColorStop(0, '#ffe066');
-  g.addColorStop(0.7, '#f5a623');
-  g.addColorStop(1, '#e8890c');
-  ctx.fillStyle = g;
-  circle(ctx, cx, cy, 11 * s);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.75)';
-  circle(ctx, cx - 3.5 * s, cy - 3.5 * s, 3 * s);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  circle(ctx, cx + 4 * s, cy + 3 * s, 2 * s);
-  ctx.fill();
-}
-
-function drawKecap(ctx, cx, cy, s) {
-  // Botol kecap: botol gelap berleher sempit, tutup merah, label krem.
-  shadow(ctx, 'rgba(0,0,0,0.22)', 4 * s, 0, 2 * s);
-  const g = ctx.createLinearGradient(cx - 12 * s, 0, cx + 12 * s, 0);
-  g.addColorStop(0, '#3a1c0d');
-  g.addColorStop(0.5, '#5a2c12');
-  g.addColorStop(1, '#2a1408');
-  ctx.fillStyle = g;
-  rr(ctx, cx - 11 * s, cy - 6 * s, 22 * s, 30 * s, 7 * s);
-  ctx.fill();
-  ctx.fillStyle = '#5a2c12';
-  rr(ctx, cx - 6 * s, cy - 20 * s, 12 * s, 16 * s, 3 * s);
-  ctx.fill();
-  noShadow(ctx);
-  ctx.fillStyle = '#d94f3d';
-  rr(ctx, cx - 7 * s, cy - 26 * s, 14 * s, 8 * s, 3 * s);
-  ctx.fill();
-  ctx.fillStyle = '#f7ead0';
-  rr(ctx, cx - 11 * s, cy + 2 * s, 22 * s, 14 * s, 3 * s);
-  ctx.fill();
-  ctx.fillStyle = '#d94f3d';
-  ctx.fillRect(cx - 11 * s, cy + 7 * s, 22 * s, 3 * s);
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.fillRect(cx - 8 * s, cy - 4 * s, 3 * s, 26 * s);
-}
-
-// Udang (v14): DIREVISI TOTAL — referensi baru Fiqih (udang matang di piring).
-// Montok, pink-oranye PUCAT + krem, SANGAT mengilap, segmen jelas,
-// ujung "kepala" BULAT GEMUK (krem), ekor mengecil membulat.
-function drawUdang(ctx, cx, cy, s) {
-  shadow(ctx, 'rgba(0,0,0,0.2)', 4 * s, 0, 2 * s);
-  ctx.lineCap = 'round';
-  // Tubuh luar: busur C SANGAT TEBAL (garis 17) — gemuk, berisi.
-  const g = ctx.createLinearGradient(cx - 20 * s, cy - 14 * s, cx + 20 * s, cy + 16 * s);
-  g.addColorStop(0, '#f7c4a8');
-  g.addColorStop(0.5, '#f2a184');
-  g.addColorStop(1, '#e87a5a');
-  ctx.strokeStyle = g;
-  ctx.lineWidth = 17 * s;
-  ctx.beginPath();
-  ctx.arc(cx, cy + 2 * s, 14 * s, Math.PI * 0.15, Math.PI * 1.75);
-  ctx.stroke();
-  noShadow(ctx);
-  // Perut dalam: krem terang (lebar 10) — tubuh terlihat berisi & segar.
-  ctx.strokeStyle = '#fbe0c8';
-  ctx.lineWidth = 10 * s;
-  ctx.beginPath();
-  ctx.arc(cx, cy + 2 * s, 14 * s, Math.PI * 0.25, Math.PI * 1.65);
-  ctx.stroke();
-  // Garis segmen oranye tipis (5 garis, jelas seperti referensi).
-  ctx.strokeStyle = '#d96a4a';
-  ctx.lineWidth = 1.8 * s;
-  for (const a of [0.45, 0.8, 1.15, 1.5, 1.85]) {
-    const x1 = cx + Math.cos(a) * 7 * s;
-    const y1 = cy + 2 * s + Math.sin(a) * 7 * s;
-    const x2 = cx + Math.cos(a) * 23 * s;
-    const y2 = cy + 2 * s + Math.sin(a) * 23 * s;
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-  }
-  // Ujung "kepala" BULAT GEMUK (krem, r=9) — seperti referensi.
-  const hx = cx + Math.cos(Math.PI * 1.75) * 14 * s;
-  const hy = cy + 2 * s + Math.sin(Math.PI * 1.75) * 14 * s;
-  const hg = ctx.createRadialGradient(hx - 3 * s, hy - 3 * s, 2 * s, hx, hy, 10 * s);
-  hg.addColorStop(0, '#fff6e8');
-  hg.addColorStop(0.6, '#fbe0c8');
-  hg.addColorStop(1, '#f2a184');
-  ctx.fillStyle = hg;
-  circle(ctx, hx, hy, 9 * s);
-  ctx.fill();
-  // Ekor kecil mengecil membulat (ujung kanan atas busur).
-  const tx = cx + Math.cos(Math.PI * 0.15) * 14 * s;
-  const ty = cy + 2 * s + Math.sin(Math.PI * 0.15) * 14 * s;
-  ctx.fillStyle = '#e87a5a';
-  ctx.beginPath();
-  ctx.moveTo(tx, ty);
-  ctx.lineTo(tx + 13 * s, ty - 6 * s);
-  ctx.lineTo(tx + 11 * s, ty + 2 * s);
-  ctx.lineTo(tx + 14 * s, ty + 8 * s);
-  ctx.closePath();
-  ctx.fill();
-  // Kilau SANGAT kuat (seperti referensi — udang mengilap segar).
-  ctx.strokeStyle = 'rgba(255,255,255,0.9)';
-  ctx.lineWidth = 3 * s;
-  ctx.beginPath();
-  ctx.arc(cx, cy + 2 * s, 14 * s, Math.PI * 1.05, Math.PI * 1.5);
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  circle(ctx, cx - 10 * s, cy - 8 * s, 2.5 * s);
-  ctx.fill();
-  circle(ctx, cx + 2 * s, cy - 12 * s, 2 * s);
-  ctx.fill();
-}
-
-// Spaghetti mentah (v13, dipertahankan v14-v18): ikatan RAPAT — stik BERDEMPETAN.
-// Referensi: ikatan pasta kering — stik rapat, ujung sedikit mengembang
-// seperti kipas, diikat pita merah di tengah.
-function drawSpaghettiRaw(ctx, cx, cy, s) {
-  shadow(ctx, 'rgba(0,0,0,0.18)', 3 * s, 0, 2 * s);
-  ctx.lineCap = 'round';
-  // 9 stik RAPAT (jarak 3,2 — berdempetan), ujung mengembang seperti kipas.
-  for (let i = -4; i <= 4; i++) {
-    ctx.strokeStyle = i % 2 === 0 ? '#f2d98a' : '#e8c96a';
-    ctx.lineWidth = 3.2 * s;
-    const topX = cx + i * 3.2 * s;
-    const botX = cx + i * 4.2 * s;
-    ctx.beginPath();
-    ctx.moveTo(topX, cy - 24 * s);
-    ctx.lineTo(botX, cy + 22 * s);
-    ctx.stroke();
-  }
-  noShadow(ctx);
-  // Pita pengikat merah (lebih lebar, jelas mengikat).
-  ctx.fillStyle = '#d94f3d';
-  ctx.fillRect(cx - 15 * s, cy - 5 * s, 30 * s, 7 * s);
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.fillRect(cx - 11 * s, cy - 5 * s, 3 * s, 7 * s);
-  // Kilau di stik tengah.
-  ctx.strokeStyle = 'rgba(255,255,255,0.5)';
-  ctx.lineWidth = 1.2 * s;
-  ctx.beginPath();
-  ctx.moveTo(cx - 1 * s, cy - 22 * s);
-  ctx.lineTo(cx - 1 * s, cy + 20 * s);
-  ctx.stroke();
-}
-
-// Daging mentah (v14): DIREVISI TOTAL — referensi baru Fiqih (steak tebal).
-// BALOK persegi panjang membulat + sisi 3D TEBAL, marmer putih TEBAL,
-// tepi lemak putih, merah KAYA, mengilap segar. BUKAN lagi elips datar.
-function drawDaging(ctx, cx, cy, s) {
-  shadow(ctx, 'rgba(0,0,0,0.22)', 4 * s, 0, 2 * s);
-  // Sisi 3D TEBAL (bawah, merah gelap) — steak terlihat tebal.
-  ctx.fillStyle = '#7a1f14';
-  rr(ctx, cx - 25 * s, cy - 6 * s, 50 * s, 26 * s, 9 * s);
-  ctx.fill();
-  noShadow(ctx);
-  // Permukaan atas: balok membulat, merah KAYA (gradien).
-  const g = ctx.createRadialGradient(cx - 8 * s, cy - 8 * s, 4 * s, cx, cy - 2 * s, 30 * s);
-  g.addColorStop(0, '#e84a3a');
-  g.addColorStop(0.6, '#c0392b');
-  g.addColorStop(1, '#96281b');
-  ctx.fillStyle = g;
-  rr(ctx, cx - 26 * s, cy - 16 * s, 52 * s, 26 * s, 10 * s);
-  ctx.fill();
-  // Tepi lemak putih di sisi kanan (seperti referensi — lemak menumpuk).
-  ctx.fillStyle = 'rgba(255,240,230,0.92)';
-  ctx.beginPath();
-  ctx.moveTo(cx + 14 * s, cy - 16 * s);
-  ctx.quadraticCurveTo(cx + 26 * s, cy - 12 * s, cx + 26 * s, cy - 2 * s);
-  ctx.quadraticCurveTo(cx + 26 * s, cy + 6 * s, cx + 18 * s, cy + 8 * s);
-  ctx.quadraticCurveTo(cx + 24 * s, cy - 2 * s, cx + 14 * s, cy - 16 * s);
-  ctx.closePath();
-  ctx.fill();
-  // Marmer: urat putih TEBAL bercabang (seperti referensi).
-  ctx.strokeStyle = 'rgba(255,240,230,0.95)';
-  ctx.lineCap = 'round';
-  ctx.lineWidth = 3.6 * s;
-  ctx.beginPath();
-  ctx.moveTo(cx - 20 * s, cy - 8 * s);
-  ctx.quadraticCurveTo(cx - 4 * s, cy - 12 * s, cx + 10 * s, cy - 8 * s);
-  ctx.quadraticCurveTo(cx + 18 * s, cy - 6 * s, cx + 20 * s, cy - 2 * s);
-  ctx.stroke();
-  // Tambalan lemak putih BESAR (2 patch, seperti referensi).
-  ctx.fillStyle = 'rgba(255,240,230,0.92)';
-  ctx.beginPath();
-  ctx.ellipse(cx - 8 * s, cy - 10 * s, 8 * s, 4.5 * s, -0.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.beginPath();
-  ctx.ellipse(cx + 4 * s, cy + 2 * s, 6 * s, 3.5 * s, 0.3, 0, Math.PI * 2);
-  ctx.fill();
-  // Cabang-cabang marmer.
-  ctx.lineWidth = 2.2 * s;
-  ctx.beginPath();
-  ctx.moveTo(cx - 8 * s, cy - 11 * s);
-  ctx.quadraticCurveTo(cx - 12 * s, cy - 4 * s, cx - 16 * s, cy + 2 * s);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx + 2 * s, cy - 8 * s);
-  ctx.quadraticCurveTo(cx, cy - 1 * s, cx + 6 * s, cy + 5 * s);
-  ctx.stroke();
-  ctx.beginPath();
-  ctx.moveTo(cx + 12 * s, cy - 7 * s);
-  ctx.quadraticCurveTo(cx + 16 * s, cy - 1 * s, cx + 14 * s, cy + 4 * s);
-  ctx.stroke();
-  // Bercak lemak kecil (marbling).
-  ctx.fillStyle = 'rgba(255,240,230,0.9)';
-  for (const [dx, dy, r] of [[-18, 0, 2.2], [-2, 4, 1.8], [16, -4, 2], [-14, -12, 1.6]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, r * s);
-    ctx.fill();
-  }
-  // Kilau basah kuat (daging segar mengilap).
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.beginPath();
-  ctx.ellipse(cx - 12 * s, cy - 11 * s, 10 * s, 3.5 * s, -0.25, 0, Math.PI * 2);
-  ctx.fill();
-}
-function drawSaus(ctx, cx, cy, s) {
-  // Mangkuk saus tomat: mangkuk putih + saus merah mengilap (fresh, merah hidup).
-  shadow(ctx, 'rgba(0,0,0,0.2)', 4 * s, 0, 2 * s);
-  ctx.fillStyle = '#f7f3e8';
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 8 * s, 26 * s, 12 * s, 0, 0, Math.PI);
-  ctx.closePath();
-  ctx.fill();
-  noShadow(ctx);
-  ctx.fillStyle = '#d43a1e';
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 2 * s, 24 * s, 11 * s, 0, Math.PI, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.beginPath();
-  ctx.ellipse(cx - 8 * s, cy - 2 * s, 8 * s, 3 * s, -0.3, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#8a2a12';
-  circle(ctx, cx + 6 * s, cy, 2.5 * s);
-  ctx.fill();
-  ctx.fillStyle = '#5a1a08';
-  for (const [dx, dy] of [[-4, 2], [10, -3]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, 1.5 * s);
-    ctx.fill();
-  }
-}
-
-function drawKeju(ctx, cx, cy, s) {
-  // Keju: balok kuning cerah dengan lubang + serpihan.
-  shadow(ctx, 'rgba(0,0,0,0.18)', 4 * s, 0, 2 * s);
-  ctx.fillStyle = '#f7c948';
-  rr(ctx, cx - 22 * s, cy - 10 * s, 44 * s, 22 * s, 5 * s);
-  ctx.fill();
-  noShadow(ctx);
-  ctx.fillStyle = '#e8a83e';
-  rr(ctx, cx - 22 * s, cy + 2 * s, 44 * s, 10 * s, 5 * s);
-  ctx.fill();
-  ctx.fillStyle = '#c98a2a';
-  for (const [dx, dy, r] of [[-10, -4, 3], [4, -6, 2.5], [12, 2, 3.5], [-2, 6, 2]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, r * s);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#fff6e0';
+// v19 S4: koki mungil. mood: 'senyum' | 'rayakan' | 'sedih'.
+// Digambar dari bentuk dasar (topi, wajah, apron, lengan).
+export function drawChef(ctx, x, y, sc, mood = 'senyum') {
   ctx.save();
-  ctx.translate(cx + 16 * s, cy - 16 * s);
-  ctx.rotate(0.4);
-  ctx.fillRect(-5 * s, -1.5 * s, 10 * s, 3 * s);
-  ctx.restore();
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.fillRect(cx - 18 * s, cy - 8 * s, 30 * s, 2 * s);
-}
-
-function drawRoti(ctx, cx, cy, s) {
-  // Roti burger: bun atas mengilap + wijen + bun bawah.
-  shadow(ctx, 'rgba(0,0,0,0.2)', 4 * s, 0, 2 * s);
-  const g = ctx.createLinearGradient(cx, cy - 20 * s, cx, cy + 16 * s);
-  g.addColorStop(0, '#f2c078');
-  g.addColorStop(1, '#d89a4e');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy - 2 * s, 26 * s, 18 * s, 0, Math.PI, 0);
-  ctx.closePath();
+  ctx.translate(x, y);
+  ctx.scale(sc, sc);
+  // Badan / apron.
+  ctx.fillStyle = '#f7f3ea';
+  rr(ctx, -26, 18, 52, 46, 10);
   ctx.fill();
-  noShadow(ctx);
-  ctx.fillStyle = '#fff6e0';
-  for (const [dx, dy] of [[-12, -10], [-2, -14], [10, -10], [4, -6], [-6, -6]]) {
-    ctx.beginPath();
-    ctx.ellipse(cx + dx * s, cy + dy * s, 2.5 * s, 1.5 * s, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#e8b96a';
-  rr(ctx, cx - 24 * s, cy + 2 * s, 48 * s, 10 * s, 4 * s);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.beginPath();
-  ctx.ellipse(cx - 8 * s, cy - 12 * s, 10 * s, 3 * s, -0.2, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-function drawPatty(ctx, cx, cy, s) {
-  // Patty: daging panggang cokelat dengan garis grill.
-  shadow(ctx, 'rgba(0,0,0,0.22)', 4 * s, 0, 2 * s);
-  const g = ctx.createLinearGradient(cx, cy - 10 * s, cx, cy + 10 * s);
-  g.addColorStop(0, '#8a5a3b');
-  g.addColorStop(1, '#6a3a22');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy, 26 * s, 13 * s, 0, 0, Math.PI * 2);
-  ctx.fill();
-  noShadow(ctx);
-  ctx.strokeStyle = '#4a2410';
-  ctx.lineWidth = 2 * s;
-  for (const dx of [-14, -5, 4, 13]) {
-    ctx.beginPath();
-    ctx.moveTo(cx + dx * s, cy - 8 * s);
-    ctx.lineTo(cx + (dx - 3) * s, cy + 8 * s);
-    ctx.stroke();
-  }
-  ctx.fillStyle = 'rgba(255,200,120,0.35)';
-  ctx.beginPath();
-  ctx.ellipse(cx - 8 * s, cy - 5 * s, 10 * s, 3 * s, -0.2, 0, Math.PI * 2);
-  ctx.fill();
-  ctx.fillStyle = '#4a2410';
-  for (const [dx, dy] of [[-18, 2], [8, -6], [16, 4]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, 1.5 * s);
-    ctx.fill();
-  }
-}
-
-function drawSelada(ctx, cx, cy, s) {
-  // Selada: daun hijau SEGAR (hijau cerah, v14 fresh).
-  ctx.fillStyle = '#45b058';
-  ctx.beginPath();
-  ctx.moveTo(cx - 24 * s, cy);
-  ctx.quadraticCurveTo(cx - 18 * s, cy - 14 * s, cx - 8 * s, cy - 6 * s);
-  ctx.quadraticCurveTo(cx, cy - 14 * s, cx + 8 * s, cy - 6 * s);
-  ctx.quadraticCurveTo(cx + 18 * s, cy - 14 * s, cx + 24 * s, cy);
-  ctx.quadraticCurveTo(cx + 16 * s, cy + 8 * s, cx + 6 * s, cy + 4 * s);
-  ctx.quadraticCurveTo(cx, cy + 10 * s, cx - 6 * s, cy + 4 * s);
-  ctx.quadraticCurveTo(cx - 16 * s, cy + 8 * s, cx - 24 * s, cy);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = '#2a8a3a';
-  ctx.lineWidth = 1.5 * s;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - 8 * s);
-  ctx.lineTo(cx, cy + 4 * s);
+  ctx.strokeStyle = '#d8cfb8';
+  ctx.lineWidth = 2;
   ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,255,0.35)';
-  ctx.lineWidth = 1 * s;
-  ctx.beginPath();
-  ctx.moveTo(cx - 14 * s, cy - 4 * s);
-  ctx.lineTo(cx - 4 * s, cy - 2 * s);
-  ctx.moveTo(cx + 6 * s, cy - 6 * s);
-  ctx.lineTo(cx + 16 * s, cy - 3 * s);
-  ctx.stroke();
-}
-
-function drawTeh(ctx, cx, cy, s) {
-  // Gelas es teh: gelas bening + teh cokelat + es batu + sedotan.
-  shadow(ctx, 'rgba(0,0,0,0.18)', 4 * s, 0, 2 * s);
-  ctx.fillStyle = 'rgba(190,220,240,0.55)';
-  ctx.beginPath();
-  ctx.moveTo(cx - 16 * s, cy - 20 * s);
-  ctx.lineTo(cx + 16 * s, cy - 20 * s);
-  ctx.lineTo(cx + 12 * s, cy + 20 * s);
-  ctx.lineTo(cx - 12 * s, cy + 20 * s);
-  ctx.closePath();
+  ctx.fillStyle = '#e2574c';
+  rr(ctx, -26, 18, 52, 12, 6);
   ctx.fill();
-  noShadow(ctx);
-  ctx.fillStyle = '#b06a2e';
-  ctx.beginPath();
-  ctx.moveTo(cx - 14 * s, cy - 12 * s);
-  ctx.lineTo(cx + 14 * s, cy - 12 * s);
-  ctx.lineTo(cx + 11 * s, cy + 18 * s);
-  ctx.lineTo(cx - 11 * s, cy + 18 * s);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#bfe8ff';
-  ctx.save();
-  ctx.translate(cx - 5 * s, cy - 4 * s);
-  ctx.rotate(0.4);
-  ctx.fillRect(-4 * s, -4 * s, 8 * s, 8 * s);
-  ctx.restore();
-  ctx.save();
-  ctx.translate(cx + 6 * s, cy + 4 * s);
-  ctx.rotate(-0.3);
-  ctx.fillRect(-4 * s, -4 * s, 8 * s, 8 * s);
-  ctx.restore();
-  ctx.strokeStyle = '#d94f3d';
-  ctx.lineWidth = 4 * s;
+  // Lengan.
+  ctx.strokeStyle = '#f7f3ea';
+  ctx.lineWidth = 10;
   ctx.lineCap = 'round';
   ctx.beginPath();
-  ctx.moveTo(cx + 4 * s, cy + 10 * s);
-  ctx.lineTo(cx + 12 * s, cy - 28 * s);
-  ctx.stroke();
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  for (const [dx, dy] of [[-6, 6], [4, 12], [0, 0]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, 1.5 * s);
-    ctx.fill();
+  if (mood === 'rayakan') {
+    ctx.moveTo(-24, 26); ctx.lineTo(-40, -6);
+    ctx.moveTo(24, 26); ctx.lineTo(40, -6);
+  } else if (mood === 'sedih') {
+    ctx.moveTo(-24, 26); ctx.lineTo(-34, 52);
+    ctx.moveTo(24, 26); ctx.lineTo(34, 52);
+  } else {
+    ctx.moveTo(-24, 26); ctx.lineTo(-40, 10);
+    ctx.moveTo(24, 26); ctx.lineTo(42, 2);
   }
-}
-
-function drawEs(ctx, cx, cy, s) {
-  // Es batu: kubus bening kebiruan.
-  shadow(ctx, 'rgba(0,0,0,0.15)', 3 * s, 0, 2 * s);
-  ctx.fillStyle = '#bfe8ff';
-  ctx.save();
-  ctx.translate(cx, cy);
-  ctx.rotate(0.2);
-  ctx.fillRect(-14 * s, -14 * s, 28 * s, 28 * s);
-  ctx.restore();
-  noShadow(ctx);
-  ctx.fillStyle = 'rgba(255,255,255,0.8)';
-  ctx.beginPath();
-  ctx.moveTo(cx - 10 * s, cy - 10 * s);
-  ctx.lineTo(cx + 2 * s, cy - 10 * s);
-  ctx.lineTo(cx - 10 * s, cy + 2 * s);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = 'rgba(120,180,220,0.8)';
-  ctx.lineWidth = 1.5 * s;
-  ctx.strokeRect(cx - 14 * s, cy - 14 * s, 28 * s, 28 * s);
-  ctx.strokeStyle = 'rgba(255,255,255,0.6)';
-  ctx.lineWidth = 1 * s;
-  ctx.beginPath();
-  ctx.moveTo(cx - 6 * s, cy - 12 * s);
-  ctx.lineTo(cx + 2 * s, cy - 2 * s);
-  ctx.lineTo(cx - 2 * s, cy + 10 * s);
   ctx.stroke();
-}
-
-function drawGula(ctx, cx, cy, s) {
-  // Gula: mangkuk kecil + kubus gula putih.
-  shadow(ctx, 'rgba(0,0,0,0.15)', 3 * s, 0, 2 * s);
-  ctx.fillStyle = '#f7f3e8';
+  // Tangan (melambai saat senyum).
+  ctx.fillStyle = '#f2c9a0';
   ctx.beginPath();
-  ctx.ellipse(cx, cy + 10 * s, 20 * s, 8 * s, 0, 0, Math.PI);
-  ctx.closePath();
+  if (mood === 'rayakan') { ctx.arc(-40, -8, 6, 0, Math.PI * 2); ctx.arc(40, -8, 6, 0, Math.PI * 2); }
+  else if (mood === 'sedih') { ctx.arc(-34, 54, 6, 0, Math.PI * 2); ctx.arc(34, 54, 6, 0, Math.PI * 2); }
+  else { ctx.arc(-40, 10, 6, 0, Math.PI * 2); ctx.arc(44, 0, 6, 0, Math.PI * 2); }
   ctx.fill();
-  noShadow(ctx);
+  // Kepala.
+  ctx.fillStyle = '#f2c9a0';
+  ctx.beginPath(); ctx.arc(0, 0, 24, 0, Math.PI * 2); ctx.fill();
+  // Topi koki.
   ctx.fillStyle = '#ffffff';
-  ctx.save();
-  ctx.translate(cx - 6 * s, cy - 4 * s);
-  ctx.rotate(0.15);
-  ctx.fillRect(-6 * s, -6 * s, 12 * s, 12 * s);
-  ctx.restore();
-  ctx.save();
-  ctx.translate(cx + 7 * s, cy - 2 * s);
-  ctx.rotate(-0.2);
-  ctx.fillRect(-6 * s, -6 * s, 12 * s, 12 * s);
-  ctx.restore();
-  ctx.fillStyle = 'rgba(0,0,0,0.12)';
-  ctx.fillRect(cx - 12 * s, cy + 2 * s, 24 * s, 2 * s);
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillRect(cx - 11 * s, cy - 9 * s, 3 * s, 3 * s);
-  ctx.fillRect(cx + 2 * s, cy - 7 * s, 3 * s, 3 * s);
-}
-
-// ---------- bahan baru v15 (2 minuman) ----------
-// Stroberi: buah merah segar — bentuk hati membulat, biji kuning,
-// daun hijau di atas, kilau basah. Dipotong di talenan.
-function drawStroberi(ctx, cx, cy, s) {
-  shadow(ctx, 'rgba(0,0,0,0.2)', 4 * s, 0, 2 * s);
-  // Tubuh stroberi: merah cerah mengilap.
-  const g = ctx.createRadialGradient(cx - 6 * s, cy - 8 * s, 3 * s, cx, cy + 2 * s, 26 * s);
-  g.addColorStop(0, '#ff7a9e');
-  g.addColorStop(0.55, '#e83e6b');
-  g.addColorStop(1, '#c22a52');
-  ctx.fillStyle = g;
+  ctx.beginPath(); ctx.arc(-14, -20, 11, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, -24, 12, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(14, -20, 11, 0, Math.PI * 2); ctx.fill();
+  rr(ctx, -22, -26, 44, 12, 5); ctx.fill();
+  ctx.strokeStyle = '#e3dcc8'; ctx.lineWidth = 1.5; ctx.stroke();
+  // Mata.
+  ctx.fillStyle = '#2b2118';
+  ctx.beginPath(); ctx.arc(-8, -2, 2.6, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(8, -2, 2.6, 0, Math.PI * 2); ctx.fill();
+  // Mulut.
+  ctx.strokeStyle = '#2b2118';
+  ctx.lineWidth = 2;
   ctx.beginPath();
-  ctx.moveTo(cx, cy + 22 * s);
-  ctx.bezierCurveTo(cx - 20 * s, cy + 10 * s, cx - 22 * s, cy - 8 * s, cx - 14 * s, cy - 14 * s);
-  ctx.quadraticCurveTo(cx - 6 * s, cy - 20 * s, cx, cy - 14 * s);
-  ctx.quadraticCurveTo(cx + 6 * s, cy - 20 * s, cx + 14 * s, cy - 14 * s);
-  ctx.bezierCurveTo(cx + 22 * s, cy - 8 * s, cx + 20 * s, cy + 10 * s, cx, cy + 22 * s);
-  ctx.closePath();
-  ctx.fill();
-  noShadow(ctx);
-  // Biji kuning kecil (achebes).
-  ctx.fillStyle = '#ffe066';
-  for (const [dx, dy] of [[-12, -6], [-4, -10], [5, -8], [12, -4], [-14, 2], [-6, 0], [3, 2], [11, 5], [-9, 9], [1, 11], [9, 12]]) {
-    ctx.beginPath();
-    ctx.ellipse(cx + dx * s, cy + dy * s, 1.6 * s, 2.4 * s, 0.2, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Daun hijau (calyx) di atas.
-  ctx.fillStyle = '#2a9a3a';
-  for (const a of [-0.9, -0.45, 0, 0.45, 0.9]) {
-    ctx.save();
-    ctx.translate(cx, cy - 14 * s);
-    ctx.rotate(a);
-    ctx.beginPath();
-    ctx.ellipse(0, -5 * s, 3.5 * s, 7 * s, 0, 0, Math.PI * 2);
-    ctx.fill();
-    ctx.restore();
-  }
-  // Kilau basah.
-  ctx.fillStyle = 'rgba(255,255,255,0.55)';
-  ctx.beginPath();
-  ctx.ellipse(cx - 9 * s, cy - 6 * s, 4 * s, 7 * s, -0.4, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-// Soda: botol soda bening — badan membulat, leher sempit, tutup biru,
-// cairan bening + gelembung naik. Dituang langsung (siap).
-function drawSoda(ctx, cx, cy, s) {
-  shadow(ctx, 'rgba(0,0,0,0.2)', 4 * s, 0, 2 * s);
-  // Badan botol bening kebiruan.
-  ctx.fillStyle = 'rgba(190,225,245,0.75)';
-  ctx.beginPath();
-  ctx.moveTo(cx - 7 * s, cy - 16 * s);
-  ctx.lineTo(cx + 7 * s, cy - 16 * s);
-  ctx.lineTo(cx + 7 * s, cy + 4 * s);
-  ctx.quadraticCurveTo(cx + 13 * s, cy + 8 * s, cx + 13 * s, cy + 14 * s);
-  ctx.lineTo(cx + 13 * s, cy + 20 * s);
-  ctx.quadraticCurveTo(cx + 13 * s, cy + 24 * s, cx + 9 * s, cy + 24 * s);
-  ctx.lineTo(cx - 9 * s, cy + 24 * s);
-  ctx.quadraticCurveTo(cx - 13 * s, cy + 24 * s, cx - 13 * s, cy + 20 * s);
-  ctx.lineTo(cx - 13 * s, cy + 14 * s);
-  ctx.quadraticCurveTo(cx - 13 * s, cy + 8 * s, cx - 7 * s, cy + 4 * s);
-  ctx.closePath();
-  ctx.fill();
-  noShadow(ctx);
-  // Leher + tutup.
-  ctx.fillStyle = 'rgba(190,225,245,0.75)';
-  ctx.fillRect(cx - 6 * s, cy - 24 * s, 12 * s, 9 * s);
-  ctx.fillStyle = '#2a7fb5';
-  rr(ctx, cx - 7 * s, cy - 29 * s, 14 * s, 6 * s, 2 * s);
-  ctx.fill();
-  // Cairan + gelembung.
-  ctx.fillStyle = 'rgba(120,200,240,0.5)';
-  rr(ctx, cx - 11 * s, cy + 6 * s, 22 * s, 16 * s, 5 * s);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  for (const [dx, dy, r] of [[-6, 12, 1.8], [2, 16, 1.4], [6, 10, 1.6], [-2, 4, 1.2], [5, 2, 1.4], [-7, 18, 1.2]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, r * s);
-    ctx.fill();
-  }
-  // Kilau botol.
-  ctx.fillStyle = 'rgba(255,255,255,0.6)';
-  ctx.fillRect(cx - 10 * s, cy - 12 * s, 3 * s, 30 * s);
-}
-
-// Lemon: irisan lemon — roda kuning cerah, daging pucat, segmen jelas,
-// kulit tebal, daun hijau kecil. Diiris di talenan.
-function drawLemon(ctx, cx, cy, s) {
-  shadow(ctx, 'rgba(0,0,0,0.18)', 4 * s, 0, 2 * s);
-  // Kulit kuning cerah.
-  ctx.fillStyle = '#f2d95c';
-  circle(ctx, cx, cy, 22 * s);
-  ctx.fill();
-  noShadow(ctx);
-  // Daging lemon pucat.
-  ctx.fillStyle = '#fbf3b8';
-  circle(ctx, cx, cy, 18 * s);
-  ctx.fill();
-  // Segmen (8 potong).
-  ctx.strokeStyle = '#f2d95c';
-  ctx.lineWidth = 1.6 * s;
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.lineTo(cx + Math.cos(a) * 17 * s, cy + Math.sin(a) * 17 * s);
-    ctx.stroke();
-  }
-  ctx.fillStyle = '#fff8d0';
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 + Math.PI / 8;
-    ctx.beginPath();
-    ctx.moveTo(cx, cy);
-    ctx.arc(cx, cy, 15 * s, a - 0.28, a + 0.28);
-    ctx.closePath();
-    ctx.fill();
-  }
-  // Daun hijau kecil di atas.
-  ctx.fillStyle = '#2a9a3a';
-  ctx.beginPath();
-  ctx.ellipse(cx + 14 * s, cy - 18 * s, 7 * s, 3.5 * s, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-  // Kilau.
-  ctx.fillStyle = 'rgba(255,255,255,0.5)';
-  ctx.beginPath();
-  ctx.ellipse(cx - 8 * s, cy - 8 * s, 5 * s, 3 * s, -0.4, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-// Mint: tangkai daun mint — 3 daun hijau segar berurat, batang tipis.
-// Ditambahkan langsung (siap).
-function drawMint(ctx, cx, cy, s) {
-  shadow(ctx, 'rgba(0,0,0,0.15)', 3 * s, 0, 2 * s);
-  // Batang.
-  ctx.strokeStyle = '#2a8a3a';
-  ctx.lineWidth = 2 * s;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy + 20 * s);
-  ctx.lineTo(cx, cy - 8 * s);
+  if (mood === 'sedih') { ctx.arc(0, 14, 6, Math.PI * 1.15, Math.PI * 1.85); }
+  else { ctx.arc(0, 6, 7, 0.15 * Math.PI, 0.85 * Math.PI); }
   ctx.stroke();
-  noShadow(ctx);
-  // 3 daun mint (hijau segar, berurat).
-  for (const [dx, dy, rot, r] of [[-12, -6, -0.7, 11], [12, -2, 0.7, 11], [0, -16, 0, 12]]) {
-    ctx.save();
-    ctx.translate(cx + dx * s, cy + dy * s);
-    ctx.rotate(rot);
-    ctx.fillStyle = '#2a9a3a';
-    ctx.beginPath();
-    ctx.moveTo(0, -r * s);
-    ctx.quadraticCurveTo(r * 0.85 * s, -r * 0.2 * s, 0, r * s);
-    ctx.quadraticCurveTo(-r * 0.85 * s, -r * 0.2 * s, 0, -r * s);
-    ctx.closePath();
-    ctx.fill();
-    ctx.strokeStyle = '#1a6a2a';
-    ctx.lineWidth = 1 * s;
-    ctx.beginPath();
-    ctx.moveTo(0, -r * 0.8 * s);
-    ctx.lineTo(0, r * 0.8 * s);
-    ctx.stroke();
-    ctx.restore();
-  }
-  // Kilau daun.
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.beginPath();
-  ctx.ellipse(cx - 12 * s, cy - 10 * s, 4 * s, 2 * s, -0.5, 0, Math.PI * 2);
-  ctx.fill();
-}
-
-const DRAW_ING = {
-  nasi: drawNasi,
-  telur: drawTelur,
-  kecap: drawKecap,
-  udang: drawUdang,
-  spaghetti: drawSpaghettiRaw,
-  daging: drawDaging,
-  saus: drawSaus,
-  keju: drawKeju,
-  roti: drawRoti,
-  patty: drawPatty,
-  selada: drawSelada,
-  teh: drawTeh,
-  es: drawEs,
-  gula: drawGula,
-  stroberi: drawStroberi,
-  soda: drawSoda,
-  lemon: drawLemon,
-  mint: drawMint,
-};
-
-// ---------- alas piring & hiasan ----------
-function drawPlateBase(ctx, cx, cy, s) {
-  // Piring putih dengan bibir + bayangan.
-  shadow(ctx, 'rgba(0,0,0,0.18)', 5 * s, 0, 3 * s);
-  ctx.fillStyle = '#f7f3ee';
-  ellipse(ctx, cx, cy + 8 * s, 66 * s, 26 * s);
-  ctx.fill();
-  noShadow(ctx);
-  ctx.strokeStyle = '#d8d0c4';
-  ctx.lineWidth = 2 * s;
-  ellipse(ctx, cx, cy + 8 * s, 58 * s, 21 * s);
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,255,0.7)';
-  ctx.lineWidth = 2 * s;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 8 * s, 62 * s, 23 * s, 0, Math.PI * 1.1, Math.PI * 1.5);
-  ctx.stroke();
-}
-
-function drawTomatoSlice(ctx, x, y, r) {
-  // Tomat cerah (fresh, merah hidup).
-  ctx.fillStyle = '#ef5d3d';
-  circle(ctx, x, y, r);
-  ctx.fill();
-  ctx.fillStyle = '#f7a08a';
-  circle(ctx, x - r * 0.25, y - r * 0.25, r * 0.55);
-  ctx.fill();
-  ctx.fillStyle = '#d94f3d';
-  for (let i = 0; i < 3; i++) {
-    const a = (i / 3) * Math.PI * 2 + 0.5;
-    circle(ctx, x + Math.cos(a) * r * 0.4, y + Math.sin(a) * r * 0.4, r * 0.14);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#f7c8b8';
-  circle(ctx, x + r * 0.3, y + r * 0.2, r * 0.12);
-  ctx.fill();
-}
-
-function drawCucumberSlice(ctx, x, y, r) {
-  ctx.fillStyle = '#45b058';
-  circle(ctx, x, y, r);
-  ctx.fill();
-  ctx.fillStyle = '#c8e8a8';
-  circle(ctx, x, y, r * 0.7);
-  ctx.fill();
-  ctx.fillStyle = '#8ab86a';
-  for (let i = 0; i < 5; i++) {
-    const a = (i / 5) * Math.PI * 2;
-    circle(ctx, x + Math.cos(a) * r * 0.35, y + Math.sin(a) * r * 0.35, r * 0.09);
-    ctx.fill();
-  }
-}
-
-function drawKerupuk(ctx, x, y, r, rot) {
-  // Kerupuk putih bergelombang.
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(rot);
-  ctx.fillStyle = '#fffdf6';
-  ctx.beginPath();
-  for (let i = 0; i <= 8; i++) {
-    const a = (i / 8) * Math.PI * 2;
-    const rr2 = r * (1 + 0.12 * Math.sin(a * 3));
-    const px = Math.cos(a) * rr2;
-    const py = Math.sin(a) * rr2 * 0.8;
-    if (i === 0) ctx.moveTo(px, py);
-    else ctx.lineTo(px, py);
-  }
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = '#e8dcc8';
-  ctx.lineWidth = 1;
-  ctx.stroke();
-  ctx.fillStyle = '#f0e6d0';
-  for (let i = 0; i < 4; i++) {
-    const a = (i / 4) * Math.PI * 2 + 0.7;
-    circle(ctx, Math.cos(a) * r * 0.5, Math.sin(a) * r * 0.4, r * 0.08);
-    ctx.fill();
-  }
+  // Pipi.
+  ctx.fillStyle = 'rgba(226,87,76,0.35)';
+  ctx.beginPath(); ctx.arc(-14, 6, 4, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(14, 6, 4, 0, Math.PI * 2); ctx.fill();
   ctx.restore();
 }
 
-function drawBasilLeaf(ctx, x, y, r, rot) {
-  ctx.save();
-  ctx.translate(x, y);
-  ctx.rotate(rot);
-  ctx.fillStyle = '#2a9a3a';
-  ctx.beginPath();
-  ctx.moveTo(0, -r);
-  ctx.quadraticCurveTo(r * 0.9, -r * 0.2, 0, r);
-  ctx.quadraticCurveTo(-r * 0.9, -r * 0.2, 0, -r);
-  ctx.closePath();
-  ctx.fill();
-  ctx.strokeStyle = '#1a6a2a';
-  ctx.lineWidth = 1;
-  ctx.beginPath();
-  ctx.moveTo(0, -r * 0.8);
-  ctx.lineTo(0, r * 0.8);
-  ctx.stroke();
-  ctx.strokeStyle = 'rgba(255,255,255,0.3)';
-  ctx.lineWidth = 0.8;
-  ctx.beginPath();
-  ctx.moveTo(0, -r * 0.4);
-  ctx.lineTo(r * 0.5, -r * 0.1);
-  ctx.moveTo(0, 0);
-  ctx.lineTo(-r * 0.5, r * 0.3);
-  ctx.stroke();
-  ctx.restore();
-}
-
-// ---------- hidangan jadi ----------
-// Nasi Goreng jadi (v18 C1 — platting direvisi, perintah Fiqih 16:30 WIB).
-// Gundukan nasi keemasan dominan; telur KECIL di pinggir atas-kanan;
-// 2 udang KECIL di tepi; tomat/timun BERLAPIS (v18): 2 tomat + 2 timun,
-// ditata bertumpuk saling menutupi di sisi gundukan (fanned), bukan lagi
-// 6 irisan tersebar melengkung. Irisan lebih besar (r 8.5) supaya jelas.
-// v14: uap BERGERAK + warna lebih fresh (nasi lebih keemasan).
-function drawNasgorDish(ctx, cx, cy, s, time) {
-  drawPlateBase(ctx, cx, cy, s);
-  // Gundukan nasi goreng keemasan berbutir — BESAR & dominan (fresh).
-  shadow(ctx, 'rgba(0,0,0,0.15)', 4 * s, 0, 2 * s);
-  const g = ctx.createRadialGradient(cx - 8 * s, cy - 6 * s, 4 * s, cx, cy + 6 * s, 54 * s);
-  g.addColorStop(0, '#f7c95a');
-  g.addColorStop(0.7, '#f0b43e');
-  g.addColorStop(1, '#d18a26');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 6 * s, 52 * s, 24 * s, 0, Math.PI, 0);
-  ctx.closePath();
-  ctx.fill();
-  noShadow(ctx);
-  // Butir nasi BANYAK & JELAS di seluruh permukaan gundukan (20 butir).
-  ctx.fillStyle = '#f7d774';
-  for (let i = 0; i < 20; i++) {
-    const a = (i / 20) * Math.PI * 2 + 0.3;
-    const bx = cx + Math.cos(a) * (14 + (i % 4) * 8) * s;
-    const by = cy - 2 * s + Math.sin(a) * 8 * s;
-    ctx.beginPath();
-    ctx.ellipse(bx, by, 4.5 * s, 2.2 * s, a, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#fdf6e3';
-  for (let i = 0; i < 8; i++) {
-    const a = (i / 8) * Math.PI * 2 + 0.9;
-    const bx = cx + Math.cos(a) * (8 + (i % 3) * 10) * s;
-    const by = cy - 6 * s + Math.sin(a) * 6 * s;
-    ctx.beginPath();
-    ctx.ellipse(bx, by, 3.5 * s, 2 * s, a, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Daun bawang + cabai + telur orak-arik (taburan kecil).
-  ctx.fillStyle = '#3e9b4f';
-  for (const [dx, dy] of [[-28, -8], [10, -12], [30, 0], [-8, 0]]) {
-    ctx.fillRect(cx + dx * s, cy + dy * s, 5 * s, 2.4 * s);
-  }
-  ctx.fillStyle = '#d94f3d';
-  for (const [dx, dy] of [[-18, -2], [24, -6]]) {
-    ctx.beginPath();
-    ctx.ellipse(cx + dx * s, cy + dy * s, 4 * s, 2 * s, 0.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#ffe066';
-  for (const [dx, dy] of [[-34, 2], [4, -14], [36, 4]]) {
-    ctx.beginPath();
-    ctx.ellipse(cx + dx * s, cy + dy * s, 4.5 * s, 3 * s, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Udang KECIL di TEPI kiri-kanan gundukan (v14: model baru).
-  drawUdang(ctx, cx - 46 * s, cy + 2 * s, 0.6 * s);
-  drawUdang(ctx, cx + 46 * s, cy + 2 * s, 0.6 * s);
-  // Telur ceplok KECIL di pinggir ATAS-KANAN (skala 0,55 — BUKAN di tengah).
-  drawTelur(ctx, cx + 24 * s, cy - 16 * s, 0.55 * s);
-  // v18 C1 — Tomat 2 + timun 2 BERLAPIS di sisi gundukan nasi.
-  // Digambar dari kanan ke kiri supaya tiap irisan menutupi irisan
-  // sebelumnya (efek berlapis/fanned). Spasi 12px < diameter 17px
-  // sehingga irisan saling tumpang tindih — platting terlihat bagus.
-  drawTomatoSlice(ctx, cx + 44 * s, cy + 20 * s, 8.5 * s);
-  drawCucumberSlice(ctx, cx + 32 * s, cy + 23 * s, 8.5 * s);
-  drawTomatoSlice(ctx, cx + 20 * s, cy + 25 * s, 8.5 * s);
-  drawCucumberSlice(ctx, cx + 8 * s, cy + 26 * s, 8.5 * s);
-  // Selada kecil di pinggir kiri + kerupuk putih di pinggir kanan atas.
-  drawSelada(ctx, cx - 62 * s, cy + 2 * s, 0.45 * s);
-  drawKerupuk(ctx, cx + 58 * s, cy - 14 * s, 11 * s, 0.4);
-  drawKerupuk(ctx, cx + 64 * s, cy - 4 * s, 9 * s, -0.3);
-  // Uap BERGERAK (v14).
-  drawSteam(ctx, cx, cy, s, time);
-}
-
-// Spaghetti Bolognese jadi — v15: SAUS DIPERBAIKI TOTAL (perintah Fiqih).
-// Masalah v14: saus = elips sempurna (rx 27, ry 8) di (cx, cy−16) —
-// di TENGAH sarang (puncak sarang cy−28), bentuk lingkaran datar seperti koin.
-// v15: saus PINDAH ke PUNCAK sarang (tengah ~cy−30) + bentuk GUMPALAN ORGANIK
-// tak beraturan (bezier bergelombang, BUKAN elips) + 3 tetesan menuruni sarang
-// + butir daging (chunk) + kilau. Keju + basil di ATAS saus.
-// Sarang TIDAK diubah (10 loop ditumpuk tanpa rongga — sudah disetujui).
-function drawSpaghettiDish(ctx, cx, cy, s, time) {
-  drawPlateBase(ctx, cx, cy, s);
-  // Sarang: 10 loop penuh yang DITUMPUK — dari lebar (bawah) ke sempit (atas).
-  ctx.lineCap = 'round';
-  const loops = 10;
-  for (let i = 0; i < loops; i++) {
-    const t = i / (loops - 1); // 0 = bawah, 1 = atas
-    const rx = (48 - t * 26) * s;
-    const ry = (13 - t * 4) * s;
-    const y = cy + 12 * s - t * 40 * s;
-    ctx.strokeStyle = i % 3 === 0 ? '#f7d774' : (i % 2 === 0 ? '#f2c94c' : '#eec14a');
-    ctx.lineWidth = 7 * s;
-    ctx.beginPath();
-    ctx.ellipse(cx, y, rx, ry, 0, 0, Math.PI * 2);
-    ctx.stroke();
-    // Kilau di atas tiap loop.
-    ctx.strokeStyle = 'rgba(255,240,180,0.85)';
-    ctx.lineWidth = 2 * s;
-    ctx.beginPath();
-    ctx.ellipse(cx, y - 1.5 * s, rx * 0.96, ry * 0.9, 0, Math.PI * 1.15, Math.PI * 1.85);
-    ctx.stroke();
-  }
-  // Herba hijau cincang BANYAK tersebar di seluruh sarang (14 potong).
-  ctx.fillStyle = '#3e9b4f';
-  for (const [dx, dy, r] of [
-    [-30, 0, 0.4], [-14, -10, -0.3], [6, -6, 0.5], [24, -8, -0.4],
-    [-6, 8, 0.2], [16, -14, 0.6], [-22, -16, -0.5], [30, 2, 0.3],
-    [-2, -20, 0.4], [10, 10, -0.2], [-34, -6, 0.5], [20, 6, -0.6],
-    [-10, -26, 0.3], [2, -2, -0.4],
-  ]) {
-    ctx.save();
-    ctx.translate(cx + dx * s, cy + dy * s);
-    ctx.rotate(r);
-    ctx.fillRect(-2.4 * s, -1.2 * s, 4.8 * s, 2.4 * s);
-    ctx.restore();
-  }
-  // --- SAUS BOLOGNESE (v15, natural) ---
-  // Gumpalan organik DI ATAS sarang: bezier bergelombang (bukan elips),
-  // menutupi loop puncak, tepi tak beraturan seperti saus dituang.
-  shadow(ctx, 'rgba(0,0,0,0.18)', 3 * s, 0, 2 * s);
-  const g = ctx.createRadialGradient(cx - 6 * s, cy - 34 * s, 3 * s, cx, cy - 28 * s, 30 * s);
-  g.addColorStop(0, '#ef6a45');
-  g.addColorStop(0.65, '#d43a1e');
-  g.addColorStop(1, '#a82c14');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(cx - 26 * s, cy - 22 * s);
-  ctx.bezierCurveTo(cx - 30 * s, cy - 32 * s, cx - 22 * s, cy - 40 * s, cx - 12 * s, cy - 38 * s);
-  ctx.bezierCurveTo(cx - 4 * s, cy - 43 * s, cx + 6 * s, cy - 41 * s, cx + 14 * s, cy - 37 * s);
-  ctx.bezierCurveTo(cx + 24 * s, cy - 39 * s, cx + 29 * s, cy - 30 * s, cx + 26 * s, cy - 22 * s);
-  ctx.bezierCurveTo(cx + 18 * s, cy - 16 * s, cx + 8 * s, cy - 19 * s, cx, cy - 17 * s);
-  ctx.bezierCurveTo(cx - 8 * s, cy - 19 * s, cx - 18 * s, cy - 16 * s, cx - 26 * s, cy - 22 * s);
-  ctx.closePath();
-  ctx.fill();
-  noShadow(ctx);
-  // Tetesan saus (drip) menuruni sisi sarang — saus mengalir natural.
-  ctx.fillStyle = '#d43a1e';
-  for (const [dx, topY, len, w] of [[-18, -18, 10, 5], [6, -17, 12, 5.5], [21, -19, 9, 4.5]]) {
-    ctx.beginPath();
-    ctx.moveTo(cx + (dx - w / 2) * s, cy + topY * s);
-    ctx.lineTo(cx + (dx + w / 2) * s, cy + topY * s);
-    ctx.lineTo(cx + (dx + w / 2) * s, cy + (topY + len) * s);
-    ctx.lineTo(cx + (dx - w / 2) * s, cy + (topY + len) * s);
-    ctx.closePath();
-    ctx.fill();
-    circle(ctx, cx + dx * s, cy + (topY + len) * s, (w / 2 + 0.8) * s);
-    ctx.fill();
-  }
-  // Butir daging (chunk Bolognese) — cokelat-merah gelap di permukaan saus.
-  ctx.fillStyle = '#8a2a12';
-  for (const [dx, dy, r] of [[-14, -30, 3], [-2, -34, 2.6], [10, -28, 3.2], [18, -32, 2.2], [-8, -24, 2.4]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, r * s);
-    ctx.fill();
-  }
-  ctx.fillStyle = '#5a1a08';
-  for (const [dx, dy, r] of [[-18, -26, 2], [4, -30, 1.8], [14, -24, 2.2]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, r * s);
-    ctx.fill();
-  }
-  // Kilau basah di permukaan saus (saus segar mengilap).
-  ctx.fillStyle = 'rgba(255,255,255,0.45)';
-  ctx.beginPath();
-  ctx.ellipse(cx - 12 * s, cy - 35 * s, 9 * s, 3 * s, -0.3, 0, Math.PI * 2);
-  ctx.fill();
-  // Taburan keju (serpihan putih) DI ATAS saus — bukan melayang.
-  ctx.fillStyle = '#fff6e0';
-  for (const [dx, dy, r] of [[-14, -32, 0.4], [-4, -28, -0.3], [8, -32, 0.5], [16, -28, -0.4]]) {
-    ctx.save();
-    ctx.translate(cx + dx * s, cy + dy * s);
-    ctx.rotate(r);
-    ctx.fillRect(-3 * s, -1 * s, 6 * s, 2 * s);
-    ctx.restore();
-  }
-  // Basil hijau BESAR di puncak saus.
-  drawBasilLeaf(ctx, cx - 6 * s, cy - 40 * s, 11 * s, -0.25);
-  drawBasilLeaf(ctx, cx + 8 * s, cy - 38 * s, 9 * s, 0.5);
-  drawBasilLeaf(ctx, cx + 1 * s, cy - 44 * s, 8 * s, 0.1);
-  // Uap BERGERAK (v14).
-  drawSteam(ctx, cx, cy - 6 * s, s, time);
-}
-
-// Kentang goreng (pendamping visual Burger): kotak merah + stik emas.
-// BUKAN bahan, BUKAN hidangan — hiasan di piring Burger saja.
-function drawFries(ctx, cx, cy, s) {
-  // Stik emas (7 batang, miring acak).
-  ctx.lineCap = 'round';
-  for (const [dx, dy, rot] of [
-    [-10, -12, -0.15], [-5, -16, 0.05], [0, -13, -0.05], [5, -17, 0.1],
-    [10, -12, 0.2], [-14, -8, -0.25], [14, -9, 0.28],
-  ]) {
-    ctx.strokeStyle = '#f2c94c';
-    ctx.lineWidth = 4.5 * s;
-    ctx.beginPath();
-    ctx.moveTo(cx + dx * s, cy + dy * s + 12 * s);
-    ctx.lineTo(cx + (dx + rot * 30) * s, cy + (dy - 8) * s);
-    ctx.stroke();
-  }
-  // Kotak merah (trapesium).
-  shadow(ctx, 'rgba(0,0,0,0.2)', 3 * s, 0, 2 * s);
-  ctx.fillStyle = '#d94f3d';
-  ctx.beginPath();
-  ctx.moveTo(cx - 20 * s, cy - 6 * s);
-  ctx.lineTo(cx + 20 * s, cy - 6 * s);
-  ctx.lineTo(cx + 15 * s, cy + 16 * s);
-  ctx.lineTo(cx - 15 * s, cy + 16 * s);
-  ctx.closePath();
-  ctx.fill();
-  noShadow(ctx);
-  // Logo kuning (lingkaran) + garis putih.
-  ctx.fillStyle = '#f2c94c';
-  circle(ctx, cx, cy + 5 * s, 6 * s);
-  ctx.fill();
-  ctx.fillStyle = '#d94f3d';
-  circle(ctx, cx, cy + 5 * s, 3 * s);
-  ctx.fill();
-  ctx.fillStyle = 'rgba(255,255,255,0.25)';
-  ctx.fillRect(cx - 17 * s, cy - 4 * s, 4 * s, 16 * s);
-}
-
-// Burger jadi: bun atas + wijen, selada bergelombang, patty, keju meleleh,
-// tomat, bun bawah, bendera merah — + kentang goreng di samping.
-// v14: uap BERGERAK + warna lebih vivid.
-function drawBurgerDish(ctx, cx, cy, s, time) {
-  drawPlateBase(ctx, cx, cy, s);
-  // Bun bawah.
-  shadow(ctx, 'rgba(0,0,0,0.15)', 4 * s, 0, 2 * s);
-  ctx.fillStyle = '#e8b96a';
-  rr(ctx, cx - 34 * s, cy + 10 * s, 68 * s, 12 * s, 5 * s);
-  ctx.fill();
-  noShadow(ctx);
-  // Patty (gelap, menonjol).
-  const g = ctx.createLinearGradient(cx, cy + 2 * s, cx, cy + 12 * s);
-  g.addColorStop(0, '#8a5a3b');
-  g.addColorStop(1, '#5a3018');
-  ctx.fillStyle = g;
-  rr(ctx, cx - 38 * s, cy + 2 * s, 76 * s, 11 * s, 5 * s);
-  ctx.fill();
-  // Keju meleleh (segitiga menetes).
-  ctx.fillStyle = '#f7c948';
-  ctx.beginPath();
-  ctx.moveTo(cx - 36 * s, cy - 2 * s);
-  ctx.lineTo(cx + 36 * s, cy - 2 * s);
-  ctx.lineTo(cx + 30 * s, cy + 2 * s);
-  ctx.lineTo(cx + 18 * s, cy + 8 * s);
-  ctx.lineTo(cx + 10 * s, cy + 2 * s);
-  ctx.lineTo(cx - 2 * s, cy + 9 * s);
-  ctx.lineTo(cx - 14 * s, cy + 2 * s);
-  ctx.lineTo(cx - 26 * s, cy + 7 * s);
-  ctx.closePath();
-  ctx.fill();
-  // Selada hijau berombak (menjulur keluar) — hijau segar (v14).
-  ctx.fillStyle = '#45b058';
-  ctx.beginPath();
-  ctx.moveTo(cx - 42 * s, cy - 4 * s);
-  ctx.quadraticCurveTo(cx - 34 * s, cy + 2 * s, cx - 24 * s, cy - 4 * s);
-  ctx.quadraticCurveTo(cx - 16 * s, cy + 2 * s, cx - 6 * s, cy - 4 * s);
-  ctx.quadraticCurveTo(cx + 2 * s, cy + 2 * s, cx + 12 * s, cy - 4 * s);
-  ctx.quadraticCurveTo(cx + 20 * s, cy + 2 * s, cx + 30 * s, cy - 4 * s);
-  ctx.quadraticCurveTo(cx + 38 * s, cy + 1 * s, cx + 42 * s, cy - 4 * s);
-  ctx.lineTo(cx + 40 * s, cy - 8 * s);
-  ctx.lineTo(cx - 40 * s, cy - 8 * s);
-  ctx.closePath();
-  ctx.fill();
-  // Tomat merah (2 iris) — merah hidup.
-  ctx.fillStyle = '#ef5d3d';
-  ellipse(ctx, cx - 18 * s, cy - 8 * s, 14 * s, 4 * s);
-  ctx.fill();
-  ellipse(ctx, cx + 16 * s, cy - 8 * s, 14 * s, 4 * s);
-  ctx.fill();
-  // Bun atas (kubah mengilap) + wijen.
-  const g2 = ctx.createLinearGradient(cx, cy - 34 * s, cx, cy - 6 * s);
-  g2.addColorStop(0, '#f2c078');
-  g2.addColorStop(1, '#d89a4e');
-  ctx.fillStyle = g2;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy - 8 * s, 36 * s, 24 * s, 0, Math.PI, 0);
-  ctx.closePath();
-  ctx.fill();
-  ctx.fillStyle = '#fff6e0';
-  for (const [dx, dy] of [[-18, -22], [-6, -28], [8, -24], [20, -18], [0, -18], [-12, -14]]) {
-    ctx.beginPath();
-    ctx.ellipse(cx + dx * s, cy + dy * s, 2.5 * s, 1.5 * s, 0.3, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Kilau bun.
-  ctx.fillStyle = 'rgba(255,255,255,0.4)';
-  ctx.beginPath();
-  ctx.ellipse(cx - 14 * s, cy - 26 * s, 12 * s, 4 * s, -0.25, 0, Math.PI * 2);
-  ctx.fill();
-  // Bendera merah kecil di tusuk sate.
-  ctx.strokeStyle = '#8a5a3b';
-  ctx.lineWidth = 2 * s;
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - 30 * s);
-  ctx.lineTo(cx, cy - 52 * s);
-  ctx.stroke();
-  ctx.fillStyle = '#d94f3d';
-  ctx.beginPath();
-  ctx.moveTo(cx, cy - 52 * s);
-  ctx.lineTo(cx + 16 * s, cy - 48 * s);
-  ctx.lineTo(cx, cy - 44 * s);
-  ctx.closePath();
-  ctx.fill();
-  // Kentang goreng di samping kanan piring.
-  drawFries(ctx, cx + 76 * s, cy + 8 * s, 0.85 * s);
-  // Uap BERGERAK (v14).
-  drawSteam(ctx, cx, cy - 10 * s, s, time);
-}
-
-// Es Teh Manis jadi: gelas besar + teh + es batu + sedotan + daun mint + lemon.
-// v14: teh lebih cerah, embun lebih jelas (fresh).
-function drawEstehDish(ctx, cx, cy, s, time) {
-  drawPlateBase(ctx, cx, cy, s);
-  // Gelas besar.
-  shadow(ctx, 'rgba(0,0,0,0.2)', 5 * s, 0, 3 * s);
-  ctx.fillStyle = 'rgba(190,220,240,0.5)';
-  ctx.beginPath();
-  ctx.moveTo(cx - 30 * s, cy - 34 * s);
-  ctx.lineTo(cx + 30 * s, cy - 34 * s);
-  ctx.lineTo(cx + 22 * s, cy + 28 * s);
-  ctx.lineTo(cx - 22 * s, cy + 28 * s);
-  ctx.closePath();
-  ctx.fill();
-  noShadow(ctx);
-  // Teh cokelat keemasan (lebih cerah, v14).
-  const g = ctx.createLinearGradient(cx, cy - 26 * s, cx, cy + 26 * s);
-  g.addColorStop(0, '#d08640');
-  g.addColorStop(1, '#96521e');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(cx - 27 * s, cy - 24 * s);
-  ctx.lineTo(cx + 27 * s, cy - 24 * s);
-  ctx.lineTo(cx + 21 * s, cy + 26 * s);
-  ctx.lineTo(cx - 21 * s, cy + 26 * s);
-  ctx.closePath();
-  ctx.fill();
-  // Es batu besar (2 kubus).
-  ctx.fillStyle = '#bfe8ff';
-  ctx.save();
-  ctx.translate(cx - 10 * s, cy - 6 * s);
-  ctx.rotate(0.3);
-  ctx.fillRect(-9 * s, -9 * s, 18 * s, 18 * s);
-  ctx.restore();
-  ctx.save();
-  ctx.translate(cx + 11 * s, cy + 4 * s);
-  ctx.rotate(-0.25);
-  ctx.fillRect(-9 * s, -9 * s, 18 * s, 18 * s);
-  ctx.restore();
-  // Kilau es.
-  ctx.fillStyle = 'rgba(255,255,255,0.85)';
-  ctx.fillRect(cx - 17 * s, cy - 13 * s, 4 * s, 4 * s);
-  ctx.fillRect(cx + 5 * s, cy - 3 * s, 4 * s, 4 * s);
-  // Sedotan merah-putih bergaris.
-  ctx.strokeStyle = '#d94f3d';
-  ctx.lineWidth = 6 * s;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(cx + 8 * s, cy + 14 * s);
-  ctx.lineTo(cx + 20 * s, cy - 46 * s);
-  ctx.stroke();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 6 * s;
-  ctx.beginPath();
-  ctx.moveTo(cx + 12 * s, cy - 4 * s);
-  ctx.lineTo(cx + 16 * s, cy - 18 * s);
-  ctx.stroke();
-  // Daun mint + iris lemon di tepi gelas.
-  drawBasilLeaf(ctx, cx - 22 * s, cy - 34 * s, 10 * s, -0.6);
-  ctx.fillStyle = '#ffe066';
-  circle(ctx, cx + 26 * s, cy - 28 * s, 8 * s);
-  ctx.fill();
-  ctx.fillStyle = '#f7d774';
-  circle(ctx, cx + 26 * s, cy - 28 * s, 5 * s);
-  ctx.fill();
-  // Tetesan embun di gelas (fresh, lebih jelas v14).
-  ctx.fillStyle = 'rgba(255,255,255,0.65)';
-  for (const [dx, dy] of [[-24, -10], [24, -14], [-20, 8], [20, 14], [-10, 18], [14, 22]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, 1.8 * s);
-    ctx.fill();
-  }
-  // (Es teh dingin — tidak ada uap panas; kesegaran dari embun + es.)
-}
-
-// ---------- minuman baru v15 ----------
-// Ice Strawberry Squash jadi: gelas tinggi ramping + minuman pink stroberi
-// + es batu + stroberi di tepi gelas + sedotan pink + gelembung soda.
-// Minuman DINGIN — tanpa uap (kesegaran dari embun + es + gelembung).
-function drawStrawSquashDish(ctx, cx, cy, s, time) {
-  drawPlateBase(ctx, cx, cy, s);
-  // Gelas tinggi ramping.
-  shadow(ctx, 'rgba(0,0,0,0.2)', 5 * s, 0, 3 * s);
-  ctx.fillStyle = 'rgba(190,220,240,0.5)';
-  ctx.beginPath();
-  ctx.moveTo(cx - 26 * s, cy - 40 * s);
-  ctx.lineTo(cx + 26 * s, cy - 40 * s);
-  ctx.lineTo(cx + 20 * s, cy + 28 * s);
-  ctx.lineTo(cx - 20 * s, cy + 28 * s);
-  ctx.closePath();
-  ctx.fill();
-  noShadow(ctx);
-  // Minuman stroberi pink (gradien cerah, segar).
-  const g = ctx.createLinearGradient(cx, cy - 32 * s, cx, cy + 26 * s);
-  g.addColorStop(0, '#ff7a9e');
-  g.addColorStop(0.6, '#f75d8a');
-  g.addColorStop(1, '#e83e6b');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(cx - 23 * s, cy - 30 * s);
-  ctx.lineTo(cx + 23 * s, cy - 30 * s);
-  ctx.lineTo(cx + 19 * s, cy + 26 * s);
-  ctx.lineTo(cx - 19 * s, cy + 26 * s);
-  ctx.closePath();
-  ctx.fill();
-  // Gelembung soda naik (putih kecil, tersebar).
-  ctx.fillStyle = 'rgba(255,255,255,0.75)';
-  for (const [dx, dy, r] of [[-14, -10, 2], [-6, 4, 1.6], [4, -16, 2.2], [10, 8, 1.8], [-2, 14, 1.5], [14, -4, 1.4], [-10, 18, 1.6], [8, -22, 1.5]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, r * s);
-    ctx.fill();
-  }
-  // Es batu (2 kubus, bening kebiruan).
-  ctx.fillStyle = '#cfeeff';
-  ctx.save();
-  ctx.translate(cx - 9 * s, cy - 8 * s);
-  ctx.rotate(0.3);
-  ctx.fillRect(-8 * s, -8 * s, 16 * s, 16 * s);
-  ctx.restore();
-  ctx.save();
-  ctx.translate(cx + 10 * s, cy + 6 * s);
-  ctx.rotate(-0.25);
-  ctx.fillRect(-8 * s, -8 * s, 16 * s, 16 * s);
-  ctx.restore();
-  // Kilau es.
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillRect(cx - 15 * s, cy - 14 * s, 3.5 * s, 3.5 * s);
-  ctx.fillRect(cx + 5 * s, cy + 0 * s, 3.5 * s, 3.5 * s);
-  // Sedotan pink-putih bergaris.
-  ctx.strokeStyle = '#e83e6b';
-  ctx.lineWidth = 6 * s;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(cx + 6 * s, cy + 12 * s);
-  ctx.lineTo(cx + 18 * s, cy - 50 * s);
-  ctx.stroke();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 6 * s;
-  ctx.beginPath();
-  ctx.moveTo(cx + 10 * s, cy - 6 * s);
-  ctx.lineTo(cx + 14 * s, cy - 20 * s);
-  ctx.stroke();
-  // Stroberi segar di tepi gelas + daun mint.
-  drawStroberi(ctx, cx + 22 * s, cy - 34 * s, 0.5 * s);
-  drawBasilLeaf(ctx, cx - 20 * s, cy - 38 * s, 9 * s, -0.5);
-  // Tetesan embun di gelas (dingin, segar).
-  ctx.fillStyle = 'rgba(255,255,255,0.65)';
-  for (const [dx, dy] of [[-22, -16], [22, -20], [-18, 6], [18, 14], [-12, 20], [12, 22]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, 1.8 * s);
-    ctx.fill();
-  }
-}
-
-// Lemon Squash Mint jadi: gelas tumbler lebar + minuman kuning lemon
-// + es batu + irisan lemon di tepi + daun mint + sedotan hijau.
-// Minuman DINGIN — tanpa uap (kesegaran dari embun + es + gelembung).
-function drawLemonSquashDish(ctx, cx, cy, s, time) {
-  drawPlateBase(ctx, cx, cy, s);
-  // Gelas tumbler lebar.
-  shadow(ctx, 'rgba(0,0,0,0.2)', 5 * s, 0, 3 * s);
-  ctx.fillStyle = 'rgba(190,220,240,0.5)';
-  ctx.beginPath();
-  ctx.moveTo(cx - 32 * s, cy - 30 * s);
-  ctx.lineTo(cx + 32 * s, cy - 30 * s);
-  ctx.lineTo(cx + 26 * s, cy + 28 * s);
-  ctx.lineTo(cx - 26 * s, cy + 28 * s);
-  ctx.closePath();
-  ctx.fill();
-  noShadow(ctx);
-  // Minuman lemon kuning pucat (gradien cerah, segar).
-  const g = ctx.createLinearGradient(cx, cy - 24 * s, cx, cy + 26 * s);
-  g.addColorStop(0, '#f7e06b');
-  g.addColorStop(0.6, '#f2d95c');
-  g.addColorStop(1, '#e8c93a');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.moveTo(cx - 29 * s, cy - 22 * s);
-  ctx.lineTo(cx + 29 * s, cy - 22 * s);
-  ctx.lineTo(cx + 25 * s, cy + 26 * s);
-  ctx.lineTo(cx - 25 * s, cy + 26 * s);
-  ctx.closePath();
-  ctx.fill();
-  // Gelembung soda naik.
-  ctx.fillStyle = 'rgba(255,255,255,0.75)';
-  for (const [dx, dy, r] of [[-16, -8, 2], [-6, 6, 1.6], [6, -12, 2.2], [14, 10, 1.8], [-2, 16, 1.5], [18, -2, 1.4], [-12, 18, 1.6], [10, -18, 1.5]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, r * s);
-    ctx.fill();
-  }
-  // Es batu (2 kubus).
-  ctx.fillStyle = '#cfeeff';
-  ctx.save();
-  ctx.translate(cx - 11 * s, cy - 6 * s);
-  ctx.rotate(0.3);
-  ctx.fillRect(-8 * s, -8 * s, 16 * s, 16 * s);
-  ctx.restore();
-  ctx.save();
-  ctx.translate(cx + 12 * s, cy + 8 * s);
-  ctx.rotate(-0.25);
-  ctx.fillRect(-8 * s, -8 * s, 16 * s, 16 * s);
-  ctx.restore();
-  // Kilau es.
-  ctx.fillStyle = 'rgba(255,255,255,0.9)';
-  ctx.fillRect(cx - 17 * s, cy - 12 * s, 3.5 * s, 3.5 * s);
-  ctx.fillRect(cx + 7 * s, cy + 2 * s, 3.5 * s, 3.5 * s);
-  // Sedotan hijau-putih bergaris.
-  ctx.strokeStyle = '#2a9a3a';
-  ctx.lineWidth = 6 * s;
-  ctx.lineCap = 'round';
-  ctx.beginPath();
-  ctx.moveTo(cx + 8 * s, cy + 12 * s);
-  ctx.lineTo(cx + 20 * s, cy - 44 * s);
-  ctx.stroke();
-  ctx.strokeStyle = '#ffffff';
-  ctx.lineWidth = 6 * s;
-  ctx.beginPath();
-  ctx.moveTo(cx + 12 * s, cy - 4 * s);
-  ctx.lineTo(cx + 16 * s, cy - 18 * s);
-  ctx.stroke();
-  // Irisan lemon di tepi gelas + daun mint segar.
-  drawLemon(ctx, cx + 26 * s, cy - 28 * s, 0.45 * s);
-  drawMint(ctx, cx - 22 * s, cy - 30 * s, 0.55 * s);
-  // Tetesan embun di gelas.
-  ctx.fillStyle = 'rgba(255,255,255,0.65)';
-  for (const [dx, dy] of [[-26, -12], [26, -16], [-22, 8], [22, 16], [-14, 20], [14, 22]]) {
-    circle(ctx, cx + dx * s, cy + dy * s, 1.8 * s);
-    ctx.fill();
-  }
-}
-
-// Mie Goreng Spesial jadi (v17, S3): mie goreng — gundukan mie LEBAR & DATAR
-// (bukan kubah tinggi seperti spaghetti), mie kuning-cokelat gelap bergelombang
-// (glaze kecap), telur ceplok di atas, siraman kecap, selada di samping.
-// Harus terbaca BERBEDA dari Spaghetti Bolognese (sarang pucat + saus merah).
-function drawMieGorengDish(ctx, cx, cy, s, time) {
-  drawPlateBase(ctx, cx, cy, s);
-  // Gundukan mie: lebar & datar (rx 56, ry 18) — cokelat keemasan (kecap).
-  shadow(ctx, 'rgba(0,0,0,0.15)', 4 * s, 0, 2 * s);
-  const g = ctx.createRadialGradient(cx - 10 * s, cy - 4 * s, 4 * s, cx, cy + 8 * s, 58 * s);
-  g.addColorStop(0, '#e8b93a');
-  g.addColorStop(0.6, '#c98a2a');
-  g.addColorStop(1, '#a8651a');
-  ctx.fillStyle = g;
-  ctx.beginPath();
-  ctx.ellipse(cx, cy + 8 * s, 56 * s, 18 * s, 0, Math.PI, 0);
-  ctx.closePath();
-  ctx.fill();
-  noShadow(ctx);
-  // Helai mie goreng: garis bergelombang horizontal bertumpuk (glaze kecap).
-  ctx.lineCap = 'round';
-  const noodleColors = ['#f2c94c', '#d18a26', '#b5761e', '#e8a83e'];
-  for (let row = 0; row < 5; row++) {
-    const y = cy - 2 * s + row * 4 * s;
-    const w = 50 - row * 6;
-    ctx.strokeStyle = noodleColors[row % noodleColors.length];
-    ctx.lineWidth = 3 * s;
-    ctx.beginPath();
-    ctx.moveTo(cx - w * s, y);
-    ctx.bezierCurveTo(cx - w * 0.5 * s, y - 3 * s, cx - w * 0.2 * s, y + 3 * s, cx, y);
-    ctx.bezierCurveTo(cx + w * 0.2 * s, y - 3 * s, cx + w * 0.5 * s, y + 3 * s, cx + w * s, y);
-    ctx.stroke();
-  }
-  // Siraman kecap (garis cokelat gelap bergelombang di atas mie).
-  ctx.strokeStyle = '#5a2c12';
-  ctx.lineWidth = 2.2 * s;
-  for (const [yOff] of [[-4], [2], [8]]) {
-    ctx.beginPath();
-    ctx.moveTo(cx - 40 * s, cy + yOff * s);
-    ctx.bezierCurveTo(cx - 20 * s, cy + (yOff - 3) * s, cx - 5 * s, cy + (yOff + 3) * s, cx + 10 * s, cy + yOff * s);
-    ctx.bezierCurveTo(cx + 25 * s, cy + (yOff - 3) * s, cx + 32 * s, cy + (yOff + 2) * s, cx + 42 * s, cy + yOff * s);
-    ctx.stroke();
-  }
-  // Telur ceplok di atas mie (putih + kuning, agak ke kiri).
-  drawTelur(ctx, cx - 12 * s, cy - 12 * s, 0.6 * s);
-  // Selada di samping kanan + daun bawang + cabai.
-  drawSelada(ctx, cx + 52 * s, cy + 4 * s, 0.5 * s);
-  ctx.fillStyle = '#3e9b4f';
-  for (const [dx, dy] of [[-30, -6], [16, -8], [28, 2]]) {
-    ctx.fillRect(cx + dx * s, cy + dy * s, 5 * s, 2.4 * s);
-  }
-  ctx.fillStyle = '#d94f3d';
-  for (const [dx, dy] of [[-20, 4], [24, -2]]) {
-    ctx.beginPath();
-    ctx.ellipse(cx + dx * s, cy + dy * s, 4 * s, 2 * s, 0.5, 0, Math.PI * 2);
-    ctx.fill();
-  }
-  // Kilau glaze kecap.
-  ctx.fillStyle = 'rgba(255,255,255,0.35)';
-  ctx.beginPath();
-  ctx.ellipse(cx - 18 * s, cy - 2 * s, 12 * s, 3 * s, -0.2, 0, Math.PI * 2);
-  ctx.fill();
-  // Uap BERGERAK (mie goreng panas).
-  drawSteam(ctx, cx, cy - 4 * s, s, time);
-}
-
-const DRAW_DISH = {
-  nasgor: drawNasgorDish,
-  spaghetti: drawSpaghettiDish,
-  miegoreng: drawMieGorengDish,
-  burger: drawBurgerDish,
-  esteh: drawEstehDish,
-  strawsquash: drawStrawSquashDish,
-  lemonsquash: drawLemonSquashDish,
-};
-
-// ---------- gambar bahan di piring (tengah perakitan) ----------
-// Bahan di piring disusun melingkar; bila lengkap, gambar hidangan jadi.
-export function drawPlateContents(ctx, s, cx, cy) {
-  const match = s.orders.findIndex((o) => {
-    const d = DISHES[o.dish];
-    return d.ingredients.length === s.plate.length && d.ingredients.every((id) => s.plate.includes(id));
-  });
-  if (match >= 0) {
-    DRAW_DISH[s.orders[match].dish](ctx, cx, cy, 1, s.time);
-    return;
-  }
-  // Perakitan: bahan disusun melingkar (≤4 item).
-  const n = s.plate.length;
-  s.plate.forEach((id, i) => {
-    const a = (i / Math.max(1, n)) * Math.PI * 2 - Math.PI / 2;
-    const bx = cx + Math.cos(a) * 30;
-    const by = cy + 6 + Math.sin(a) * 14;
-    DRAW_ING[id](ctx, bx, by, 0.55);
-  });
-}
-
-// ---------- render utama ----------
-export function render(ctx, s) {
-  // Latar: dinding dapur krem + lantai kayu + garis ubin.
-  const g = ctx.createLinearGradient(0, 0, 0, 720);
-  g.addColorStop(0, '#f6ead2');
-  g.addColorStop(0.55, '#f6ead2');
-  g.addColorStop(0.56, '#e8c9a0');
-  g.addColorStop(1, '#d8a86a');
-  ctx.fillStyle = g;
+// Latar: dinding hangat bermotif ubin + rak toples (v19 S4).
+function drawBackground(ctx, s) {
+  ctx.fillStyle = '#f3e9d2';
   ctx.fillRect(0, 0, 1280, 720);
-  // Garis ubin dinding.
-  ctx.strokeStyle = 'rgba(180,150,110,0.25)';
+  // Motif ubin hangat.
+  ctx.strokeStyle = 'rgba(190,160,110,0.25)';
   ctx.lineWidth = 1;
   for (let x = 0; x <= 1280; x += 80) {
-    ctx.beginPath();
-    ctx.moveTo(x, 0);
-    ctx.lineTo(x, 400);
-    ctx.stroke();
+    ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, 720); ctx.stroke();
   }
-  for (let y = 0; y <= 400; y += 80) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(1280, y);
-    ctx.stroke();
+  for (let y = 0; y <= 720; y += 80) {
+    ctx.beginPath(); ctx.moveTo(0, y); ctx.lineTo(1280, y); ctx.stroke();
   }
-  // Papan kayu di lantai.
-  ctx.strokeStyle = 'rgba(120,80,40,0.2)';
-  for (let y = 420; y <= 720; y += 60) {
-    ctx.beginPath();
-    ctx.moveTo(0, y);
-    ctx.lineTo(1280, y);
-    ctx.stroke();
+  // Rak kayu dengan 3 toples di strip latar (y 600-612, area kiri).
+  ctx.fillStyle = '#a8763e';
+  ctx.fillRect(12, 600, 220, 8);
+  const jarColors = ['#e8b96a', '#3e9b4f', '#c93a1e'];
+  for (let i = 0; i < 3; i++) {
+    const jx = 30 + i * 70;
+    ctx.fillStyle = 'rgba(255,255,255,0.75)';
+    rr(ctx, jx, 566, 34, 34, 6); ctx.fill();
+    ctx.fillStyle = jarColors[i];
+    rr(ctx, jx + 4, 576, 26, 20, 4); ctx.fill();
+    ctx.fillStyle = '#8a5a3b';
+    ctx.fillRect(jx + 6, 562, 22, 6);
   }
-
-  if (s.screen === 'title') {
-    renderTitle(ctx, s);
-    return;
-  }
-  if (s.screen === 'win' || s.screen === 'over') {
-    renderMain(ctx, s);
-    renderEndCard(ctx, s);
-    return;
-  }
-  renderMain(ctx, s);
 }
 
-function renderTitle(ctx, s) {
-  // Judul besar + hero 7 hidangan + tombol MULAI.
-  ctx.textAlign = 'center';
-  shadow(ctx, 'rgba(0,0,0,0.25)', 8, 0, 4);
-  ctx.fillStyle = '#d94f3d';
-  ctx.font = 'bold 84px system-ui, sans-serif';
-  ctx.fillText('DAPUR KILAT', 640, 150);
-  noShadow(ctx);
-  ctx.fillStyle = '#5a2c12';
-  ctx.font = 'bold 28px system-ui, sans-serif';
-  ctx.fillText('Masak cepat, sajikan tepat waktu!', 640, 196);
-  ctx.font = '22px system-ui, sans-serif';
-  ctx.fillStyle = '#7a5a3a';
-  ctx.fillText('Ambil bahan, olah di talenan & kompor, rakit di piring, sajikan sebelum hangus.', 640, 230);
-  // Hero: 7 hidangan jadi berjejer (v17: + Mie Goreng Spesial).
-  const heroX = [100, 275, 450, 625, 800, 975, 1150];
-  const heroDish = ['nasgor', 'spaghetti', 'miegoreng', 'burger', 'esteh', 'strawsquash', 'lemonsquash'];
-  heroX.forEach((x, i) => {
-    DRAW_DISH[heroDish[i]](ctx, x, 330, 0.5, s.time);
-    ctx.fillStyle = '#5a2c12';
-    ctx.font = 'bold 17px system-ui, sans-serif';
-    ctx.fillText(DISHES[heroDish[i]].label, x, 430);
-  });
-  // Tombol MULAI.
-  const b = LAYOUT.tombolJudul;
-  shadow(ctx, 'rgba(0,0,0,0.3)', 6, 0, 3);
-  ctx.fillStyle = '#d94f3d';
-  rr(ctx, b.x, b.y, b.w, b.h, 16);
-  ctx.fill();
-  noShadow(ctx);
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold 30px system-ui, sans-serif';
-  ctx.fillText('MULAI MEMASAK', 640, b.y + 42);
-  // Instruksi.
-  ctx.fillStyle = '#5a2c12';
-  ctx.font = '20px system-ui, sans-serif';
-  ctx.fillText('Klik / tombol 1–9, A–L: ambil bahan  •  Spasi: sajikan  •  R: ulang  •  P: jeda', 640, 630);
-  ctx.fillStyle = '#7a5a3a';
-  ctx.font = '18px system-ui, sans-serif';
-  ctx.fillText('Sajikan 12 pesanan untuk menyelesaikan hari. 3 pesanan hangus = shift berakhir.', 640, 660);
-}
-
-function renderMain(ctx, s) {
-  const L = LAYOUT;
-  // Header: koin, saji, kombo, waktu, strike.
-  // v18 C2: header jadi oranye saat RUSH aktif (sinyal jam sibuk jelas).
-  ctx.fillStyle = s.rushActive ? '#b85a1e' : '#5a2c12';
-  ctx.fillRect(L.header.x, L.header.y, L.header.w, L.header.h);
-  ctx.textAlign = 'left';
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 28px system-ui, sans-serif';
-  ctx.fillText('Rp ' + s.coins, 24, 42);
-  ctx.fillStyle = '#fff';
-  ctx.font = '22px system-ui, sans-serif';
-  ctx.fillText('Saji: ' + s.served + '/' + RULES.servesToWin, 220, 40);
-  // v18 C4: teks kombo jadi EMAS + tebal bila kombo >= 3.
-  if (s.combo >= RULES.comboGlowAt) {
-    ctx.fillStyle = '#ffd700';
-    ctx.font = 'bold 22px system-ui, sans-serif';
-  } else {
-    ctx.fillStyle = '#fff';
-    ctx.font = '22px system-ui, sans-serif';
-  }
-  ctx.fillText('Kombo: x' + s.combo, 400, 40);
-  ctx.fillStyle = '#fff';
-  ctx.font = '22px system-ui, sans-serif';
-  ctx.fillText('Waktu: ' + Math.floor(s.time) + ' dtk', 580, 40);
-  ctx.fillStyle = '#ff6b6b';
-  ctx.fillText('Strike: ' + s.strikes + '/' + RULES.strikesMax, 780, 40);
-  if (s.paused) {
-    ctx.fillStyle = '#ffd700';
-    ctx.font = 'bold 24px system-ui, sans-serif';
-    ctx.fillText('JEDA (P)', 1020, 42);
-  } else if (s.rushActive) {
-    // v18 C2: indikator "⚡ RUSH!" di header (menggantikan "Di tangan" saat rush).
-    const rushAlpha = 0.7 + 0.3 * Math.sin(s.time * 6);
-    ctx.fillStyle = 'rgba(255,215,0,' + rushAlpha.toFixed(3) + ')';
-    ctx.font = 'bold 22px system-ui, sans-serif';
-    ctx.fillText('⚡ RUSH!', 1080, 42);
+// Header: koin, saji, kombo, waktu, strike. Oranye saat RUSH (v18 C2).
+function drawHeader(ctx, s, L) {
+  const rush = s.rushActive;
+  ctx.fillStyle = rush ? '#b85a1e' : '#5a3a1e';
+  ctx.fillRect(0, 0, 1280, 64);
+  text(ctx, 'Rp ' + s.coins, 24, 42, 'bold 30px sans-serif', '#ffd94d');
+  text(ctx, 'Saji: ' + s.served + '/12', 200, 40, '22px sans-serif', '#fff');
+  // v18 C4: teks Kombo emas + tebal bila kombo >= 3.
+  const comboGold = s.combo >= RULES.comboGlowAt;
+  text(ctx, 'Kombo: x' + s.combo, 380, 40, (comboGold ? 'bold ' : '') + '22px sans-serif', comboGold ? '#ffd700' : '#fff');
+  text(ctx, 'Waktu: ' + Math.max(0, Math.floor(s.time)) + ' dtk', 580, 40, '22px sans-serif', '#fff');
+  text(ctx, 'Strike: ' + s.strikes + '/3', 800, 40, '22px sans-serif', s.strikes > 0 ? '#ff8a7a' : '#fff');
+  if (rush) {
+    const a = 0.7 + 0.3 * Math.sin(s.time * 6);
+    ctx.globalAlpha = a;
+    text(ctx, '⚡ RUSH!', 1080, 42, 'bold 26px sans-serif', '#ffd700');
+    ctx.globalAlpha = 1;
   } else if (s.hand) {
-    // Indikator bahan di tangan — di header (kanan), BUKAN di footer.
-    ctx.fillStyle = '#ffd700';
-    ctx.font = 'bold 20px system-ui, sans-serif';
-    ctx.fillText('Di tangan: ' + INGREDIENTS[s.hand].label, 1000, 42);
+    text(ctx, 'Di tangan: ' + INGREDIENTS[s.hand].label, 1080, 40, '20px sans-serif', '#ffe9b0', 'left');
   }
+  if (s.paused) {
+    text(ctx, 'JEDA (P)', 640, 40, 'bold 22px sans-serif', '#ffd94d', 'center');
+  }
+}
 
-  // Stasiun talenan.
-  renderStation(ctx, s, 'talenan', L.talenan);
-  renderStation(ctx, s, 'kompor', L.kompor);
+// ---- Ikon bahan (dipakai di kartu counter, tiket, dan piring) ----
+function drawIngredientIcon(ctx, id, x, y, r) {
+  const ing = INGREDIENTS[id];
+  if (!ing) return;
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.fillStyle = ing.color;
+  ctx.strokeStyle = 'rgba(0,0,0,0.18)';
+  ctx.lineWidth = 1.5;
+  if (id === 'nasi') {
+    ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#fff8e0';
+    for (let i = 0; i < 5; i++) { ctx.beginPath(); ctx.arc(-r * 0.5 + i * r * 0.25, -r * 0.2 + (i % 2) * r * 0.25, r * 0.14, 0, Math.PI * 2); ctx.fill(); }
+  } else if (id === 'telur') {
+    ctx.beginPath(); ctx.ellipse(0, 0, r, r * 0.8, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ff9d2e';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.42, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'kecap') {
+    ctx.fillStyle = '#5a2c12';
+    rr(ctx, -r * 0.45, -r, r * 0.9, r * 2, r * 0.3); ctx.fill();
+    ctx.fillStyle = '#3a1c0a';
+    ctx.fillRect(-r * 0.45, -r * 0.4, r * 0.9, r * 0.5);
+  } else if (id === 'udang') {
+    ctx.strokeStyle = '#f28b6d'; ctx.lineWidth = r * 0.5; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.6, 0.3, Math.PI * 1.7); ctx.stroke();
+    ctx.fillStyle = '#f7e8c8';
+    ctx.beginPath(); ctx.arc(r * 0.55, -r * 0.35, r * 0.28, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'spaghetti') {
+    ctx.strokeStyle = '#f2c94c'; ctx.lineWidth = 2.5;
+    for (let i = -2; i <= 2; i++) {
+      ctx.beginPath(); ctx.moveTo(-r * 0.6, i * r * 0.32); ctx.lineTo(r * 0.6, i * r * 0.32); ctx.stroke();
+    }
+  } else if (id === 'daging') {
+    ctx.fillStyle = '#c0392b';
+    rr(ctx, -r * 0.8, -r * 0.5, r * 1.6, r, r * 0.3); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#f7e8e0';
+    ctx.beginPath(); ctx.arc(-r * 0.3, 0, r * 0.2, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.35, -r * 0.1, r * 0.15, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'saus') {
+    ctx.fillStyle = '#c93a1e';
+    ctx.beginPath(); ctx.arc(0, 0, r * 0.7, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#8a2410';
+    ctx.beginPath(); ctx.arc(-r * 0.2, -r * 0.2, r * 0.25, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'keju') {
+    ctx.fillStyle = '#fff6e0';
+    ctx.beginPath(); ctx.moveTo(-r * 0.8, r * 0.5); ctx.lineTo(r * 0.8, r * 0.5); ctx.lineTo(0, -r * 0.7); ctx.closePath(); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#e8c96a';
+    ctx.beginPath(); ctx.arc(0, r * 0.1, r * 0.16, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'roti') {
+    ctx.fillStyle = '#e8b96a';
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.85, r * 0.55, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#c98a3a';
+    ctx.beginPath(); ctx.arc(-r * 0.3, -r * 0.15, r * 0.1, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.25, -r * 0.1, r * 0.1, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'patty') {
+    ctx.fillStyle = '#8a5a3b';
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.85, r * 0.5, 0, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#6a4028';
+    ctx.beginPath(); ctx.arc(-r * 0.3, 0, r * 0.14, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'selada') {
+    ctx.fillStyle = '#3e9b4f';
+    ctx.beginPath(); ctx.ellipse(-r * 0.3, 0, r * 0.55, r * 0.4, -0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(r * 0.3, 0, r * 0.55, r * 0.4, 0.4, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'teh') {
+    ctx.fillStyle = '#a85a2a';
+    rr(ctx, -r * 0.4, -r * 0.8, r * 0.8, r * 1.6, r * 0.2); ctx.fill(); ctx.stroke();
+    ctx.strokeStyle = '#7a3a1a'; ctx.lineWidth = 2;
+    ctx.beginPath(); ctx.moveTo(r * 0.4, -r * 0.4); ctx.arc(r * 0.6, 0, r * 0.35, -Math.PI / 2, Math.PI / 2); ctx.stroke();
+  } else if (id === 'es') {
+    ctx.fillStyle = '#bfe8ff';
+    ctx.save(); ctx.rotate(Math.PI / 4);
+    ctx.fillRect(-r * 0.45, -r * 0.45, r * 0.9, r * 0.9);
+    ctx.restore();
+    ctx.strokeStyle = '#7ab8d8'; ctx.strokeRect(-r * 0.45, -r * 0.45, r * 0.9, r * 0.9);
+  } else if (id === 'gula') {
+    ctx.fillStyle = '#ffffff';
+    for (let i = 0; i < 3; i++) { ctx.beginPath(); ctx.arc(-r * 0.4 + i * r * 0.4, (i % 2) * r * 0.3 - r * 0.1, r * 0.22, 0, Math.PI * 2); ctx.fill(); ctx.stroke(); }
+  } else if (id === 'stroberi') {
+    ctx.fillStyle = '#e83e6b';
+    ctx.beginPath(); ctx.moveTo(0, r * 0.8); ctx.quadraticCurveTo(-r * 0.9, -r * 0.2, 0, -r * 0.6); ctx.quadraticCurveTo(r * 0.9, -r * 0.2, 0, r * 0.8); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#2a9a3a';
+    ctx.beginPath(); ctx.moveTo(0, -r * 0.6); ctx.lineTo(-r * 0.4, -r); ctx.lineTo(0, -r * 0.75); ctx.lineTo(r * 0.4, -r); ctx.closePath(); ctx.fill();
+  } else if (id === 'soda') {
+    ctx.fillStyle = '#bfe8ff';
+    rr(ctx, -r * 0.35, -r, r * 0.7, r * 2, r * 0.25); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.arc(0, -r * 0.4, r * 0.14, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.arc(r * 0.15, 0, r * 0.12, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'lemon') {
+    ctx.fillStyle = '#f2d95c';
+    ctx.beginPath(); ctx.ellipse(0, 0, r * 0.8, r * 0.55, 0.3, 0, Math.PI * 2); ctx.fill(); ctx.stroke();
+    ctx.fillStyle = '#d8b93a';
+    ctx.beginPath(); ctx.arc(r * 0.7, -r * 0.3, r * 0.16, 0, Math.PI * 2); ctx.fill();
+  } else if (id === 'mint') {
+    ctx.fillStyle = '#2a9a3a';
+    ctx.beginPath(); ctx.ellipse(0, -r * 0.2, r * 0.3, r * 0.6, 0.4, 0, Math.PI * 2); ctx.fill();
+    ctx.beginPath(); ctx.ellipse(0, -r * 0.2, r * 0.3, r * 0.6, -0.4, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
 
-  // Area piring.
-  ctx.fillStyle = '#fff8ea';
-  rr(ctx, L.piring.x, L.piring.y, L.piring.w, L.piring.h, 12);
-  ctx.fill();
-  ctx.strokeStyle = '#d8c9a8';
+// Uap bergerak (v14): naik-turun halus, deterministik dari s.time.
+function drawSteam(ctx, cx, cy, time) {
+  ctx.save();
+  ctx.strokeStyle = 'rgba(180,180,180,0.5)';
   ctx.lineWidth = 2;
-  rr(ctx, L.piring.x, L.piring.y, L.piring.w, L.piring.h, 12);
-  ctx.stroke();
-  // v18 C4: kilau emas di sekeliling panel PIRING bila kombo >= 3.
-  // Alpha minimum 0.4 supaya kilau selalu terlihat jelas di screenshot
-  // (bukan 0.0 di titik rendah denyut).
+  ctx.lineCap = 'round';
+  for (let i = 0; i < 3; i++) {
+    const ox = (i - 1) * 16;
+    const wob = Math.sin(time * 2.5 + i * 1.3) * 3;
+    ctx.beginPath();
+    ctx.moveTo(cx + ox, cy);
+    ctx.quadraticCurveTo(cx + ox + wob, cy - 10, cx + ox - wob, cy - 20);
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+
+// ---- Gambar hidangan jadi (skala: 1.0 = ukuran piring penuh) ----
+function drawNasgorDish(ctx, cx, cy, sc, time) {
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc);
+  // Piring.
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.ellipse(0, 6, 78, 26, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2; ctx.stroke();
+  // Gundukan nasi keemasan.
+  ctx.fillStyle = '#e8b93a';
+  ctx.beginPath(); ctx.ellipse(0, -6, 58, 30, 0, Math.PI, 0); ctx.fill();
+  ctx.fillStyle = '#f2c94c';
+  ctx.beginPath(); ctx.ellipse(-6, -10, 46, 24, 0, Math.PI, 0); ctx.fill();
+  // Butir nasi.
+  ctx.fillStyle = '#fff3c8';
+  for (let i = 0; i < 20; i++) {
+    const a = (i / 20) * Math.PI * 2;
+    const rx = Math.cos(a) * (18 + (i % 3) * 9);
+    const ry = -8 - Math.abs(Math.sin(a)) * 16 - (i % 4) * 2;
+    ctx.beginPath(); ctx.ellipse(rx, ry, 3.2, 1.8, a, 0, Math.PI * 2); ctx.fill();
+  }
+  // Telur kecil di kanan atas.
+  ctx.fillStyle = '#fff8e0';
+  ctx.beginPath(); ctx.ellipse(30, -26, 16, 11, 0.3, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ff9d2e';
+  ctx.beginPath(); ctx.arc(30, -26, 6, 0, Math.PI * 2); ctx.fill();
+  // 2 udang kecil di tepi.
+  for (const sx of [-46, 46]) {
+    ctx.strokeStyle = '#f28b6d'; ctx.lineWidth = 7; ctx.lineCap = 'round';
+    ctx.beginPath(); ctx.arc(sx, 0, 10, 0.4, Math.PI * 1.6); ctx.stroke();
+    ctx.fillStyle = '#f7e8c8';
+    ctx.beginPath(); ctx.arc(sx + 8, -6, 4, 0, Math.PI * 2); ctx.fill();
+  }
+  // Kerupuk + selada.
+  ctx.fillStyle = '#fff3d0';
+  ctx.beginPath(); ctx.ellipse(-52, 12, 12, 7, -0.5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#3e9b4f';
+  ctx.beginPath(); ctx.ellipse(52, 14, 12, 6, 0.4, 0, Math.PI * 2); ctx.fill();
+  // v18 C1: tomat + timun 2+2 BERLAPIS di sisi gundukan (kanan-bawah).
+  // Digambar kanan-ke-kiri supaya tiap irisan menumpuk irisan sebelumnya.
+  const slices = [
+    { dx: 44, dy: 20, kind: 'tomat' },
+    { dx: 32, dy: 23, kind: 'timun' },
+    { dx: 20, dy: 25, kind: 'tomat' },
+    { dx: 8, dy: 26, kind: 'timun' },
+  ];
+  for (const sl of slices) {
+    if (sl.kind === 'tomat') {
+      ctx.fillStyle = '#e83e3e';
+      ctx.beginPath(); ctx.arc(sl.dx, sl.dy, 8.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff8a7a';
+      ctx.beginPath(); ctx.arc(sl.dx, sl.dy, 5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#c93a1e';
+      ctx.beginPath(); ctx.arc(sl.dx, sl.dy, 2, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillStyle = '#2a9a3a';
+      ctx.beginPath(); ctx.arc(sl.dx, sl.dy, 8.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#bfe8a0';
+      ctx.beginPath(); ctx.arc(sl.dx, sl.dy, 5.5, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#7ab85a';
+      ctx.beginPath(); ctx.arc(sl.dx, sl.dy, 2.5, 0, Math.PI * 2); ctx.fill();
+    }
+  }
+  drawSteam(ctx, 0, -40, time);
+  ctx.restore();
+}
+
+function drawSpaghettiDish(ctx, cx, cy, sc, time) {
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.ellipse(0, 8, 76, 24, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2; ctx.stroke();
+  // Sarang mie tinggi, helai rapat tanpa rongga.
+  ctx.fillStyle = '#f2e6a8';
+  ctx.beginPath(); ctx.ellipse(0, -4, 54, 34, 0, Math.PI, 0); ctx.fill();
+  ctx.strokeStyle = '#e8d488'; ctx.lineWidth = 2;
+  for (let i = 0; i < 6; i++) {
+    ctx.beginPath(); ctx.ellipse(0, -6 - i * 3, 48 - i * 3, 8, 0, Math.PI, 0); ctx.stroke();
+  }
+  // Saus natural: gumpalan organik di puncak + 3 drip.
+  ctx.fillStyle = '#c93a1e';
+  ctx.beginPath();
+  ctx.moveTo(-26, -34);
+  ctx.quadraticCurveTo(-30, -48, -12, -46);
+  ctx.quadraticCurveTo(-4, -54, 8, -46);
+  ctx.quadraticCurveTo(26, -48, 24, -34);
+  ctx.quadraticCurveTo(0, -28, -26, -34);
+  ctx.fill();
+  ctx.fillStyle = '#a82e16';
+  for (const dx of [-16, 2, 16]) {
+    ctx.beginPath(); ctx.ellipse(dx, -26, 4, 10, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  // Daun basil.
+  ctx.fillStyle = '#2a9a3a';
+  ctx.beginPath(); ctx.ellipse(-6, -48, 7, 4, -0.5, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(6, -48, 7, 4, 0.5, 0, Math.PI * 2); ctx.fill();
+  // Taburan keju.
+  ctx.fillStyle = '#fff6e0';
+  for (let i = 0; i < 8; i++) {
+    ctx.fillRect(-30 + i * 8, -18 + (i % 2) * 6, 4, 2);
+  }
+  drawSteam(ctx, 0, -52, time);
+  ctx.restore();
+}
+
+function drawMieGorengDish(ctx, cx, cy, sc, time) {
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.ellipse(0, 8, 78, 24, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2; ctx.stroke();
+  // Gundukan mie LEBAR & DATAR cokelat-keemasan.
+  ctx.fillStyle = '#c98a3a';
+  ctx.beginPath(); ctx.ellipse(0, -2, 62, 20, 0, Math.PI, 0); ctx.fill();
+  ctx.fillStyle = '#d8a04a';
+  ctx.beginPath(); ctx.ellipse(0, -6, 56, 16, 0, Math.PI, 0); ctx.fill();
+  // Helai bergelombang + glaze kecap.
+  ctx.strokeStyle = '#a8763e'; ctx.lineWidth = 2;
+  for (let i = 0; i < 5; i++) {
+    ctx.beginPath();
+    ctx.moveTo(-48 + i * 4, -10 - i * 2);
+    ctx.quadraticCurveTo(-20, -18 - i * 2, 10, -12 - i * 2);
+    ctx.quadraticCurveTo(34, -8 - i * 2, 50, -12 - i * 2);
+    ctx.stroke();
+  }
+  ctx.strokeStyle = '#5a2c12'; ctx.lineWidth = 2.5;
+  ctx.beginPath(); ctx.moveTo(-30, -16); ctx.quadraticCurveTo(0, -20, 30, -16); ctx.stroke();
+  // Telur ceplok + selada.
+  ctx.fillStyle = '#fff8e0';
+  ctx.beginPath(); ctx.ellipse(26, -20, 14, 9, 0.2, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ff9d2e';
+  ctx.beginPath(); ctx.arc(26, -20, 5, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#3e9b4f';
+  ctx.beginPath(); ctx.ellipse(-38, 2, 12, 6, 0.4, 0, Math.PI * 2); ctx.fill();
+  drawSteam(ctx, 0, -34, time);
+  ctx.restore();
+}
+
+function drawBurgerDish(ctx, cx, cy, sc, time) {
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.ellipse(0, 10, 72, 22, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2; ctx.stroke();
+  // Roti bawah.
+  ctx.fillStyle = '#e8b96a';
+  rr(ctx, -34, 2, 68, 10, 5); ctx.fill();
+  // Selada.
+  ctx.fillStyle = '#3e9b4f';
+  ctx.beginPath(); ctx.ellipse(0, 0, 38, 7, 0, 0, Math.PI * 2); ctx.fill();
+  // Keju.
+  ctx.fillStyle = '#ffe066';
+  ctx.beginPath(); ctx.moveTo(-36, -2); ctx.lineTo(36, -2); ctx.lineTo(28, -10); ctx.lineTo(-28, -10); ctx.closePath(); ctx.fill();
+  // Patty tebal.
+  ctx.fillStyle = '#8a5a3b';
+  rr(ctx, -36, -20, 72, 12, 6); ctx.fill();
+  ctx.fillStyle = '#6a4028';
+  ctx.beginPath(); ctx.arc(-14, -14, 3, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(12, -14, 3, 0, Math.PI * 2); ctx.fill();
+  // Roti atas + wijen.
+  ctx.fillStyle = '#e8b96a';
+  ctx.beginPath(); ctx.ellipse(0, -22, 36, 16, 0, Math.PI, 0); ctx.fill();
+  ctx.fillStyle = '#fff3d0';
+  for (const [sx, sy] of [[-14, -32], [0, -36], [14, -32], [-6, -28], [8, -28]]) {
+    ctx.beginPath(); ctx.ellipse(sx, sy, 2.5, 1.5, 0, 0, Math.PI * 2); ctx.fill();
+  }
+  // Kentang goreng (pendamping visual, BUKAN bahan).
+  ctx.fillStyle = '#e83e3e';
+  ctx.beginPath(); ctx.moveTo(48, -6); ctx.lineTo(70, -6); ctx.lineTo(66, 14); ctx.lineTo(52, 14); ctx.closePath(); ctx.fill();
+  ctx.fillStyle = '#f2c94c';
+  for (let i = 0; i < 4; i++) {
+    ctx.fillRect(51 + i * 5, -16 - (i % 2) * 4, 4, 14);
+  }
+  drawSteam(ctx, 0, -40, time);
+  ctx.restore();
+}
+
+function drawDrinkDish(ctx, cx, cy, sc, time, kind) {
+  ctx.save(); ctx.translate(cx, cy); ctx.scale(sc, sc);
+  // Piring kecil.
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.ellipse(0, 12, 52, 14, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2; ctx.stroke();
+  // Gelas.
+  const body = kind === 'esteh' ? '#c98a3a' : kind === 'strawsquash' ? '#e83e6b' : '#f2d95c';
+  ctx.fillStyle = 'rgba(255,255,255,0.85)';
+  ctx.beginPath(); ctx.moveTo(-18, -34); ctx.lineTo(18, -34); ctx.lineTo(14, 10); ctx.lineTo(-14, 10); ctx.closePath(); ctx.fill();
+  ctx.strokeStyle = '#c8b898'; ctx.lineWidth = 2; ctx.stroke();
+  ctx.fillStyle = body;
+  ctx.beginPath(); ctx.moveTo(-15, -28); ctx.lineTo(15, -28); ctx.lineTo(12, 8); ctx.lineTo(-12, 8); ctx.closePath(); ctx.fill();
+  // Es batu.
+  ctx.fillStyle = 'rgba(255,255,255,0.8)';
+  ctx.save(); ctx.rotate(0.5); ctx.fillRect(-8, -18, 10, 10); ctx.restore();
+  ctx.save(); ctx.rotate(-0.4); ctx.fillRect(2, -10, 9, 9); ctx.restore();
+  // Sedotan.
+  ctx.strokeStyle = kind === 'esteh' ? '#e83e3e' : '#2a9a3a';
+  ctx.lineWidth = 4; ctx.lineCap = 'round';
+  ctx.beginPath(); ctx.moveTo(8, -30); ctx.lineTo(16, -48); ctx.stroke();
+  // Hiasan.
+  if (kind === 'strawsquash') {
+    ctx.fillStyle = '#e83e6b';
+    ctx.beginPath(); ctx.arc(-20, -30, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2a9a3a';
+    ctx.beginPath(); ctx.ellipse(-20, -38, 6, 3, -0.4, 0, Math.PI * 2); ctx.fill();
+  } else if (kind === 'lemonsquash') {
+    ctx.fillStyle = '#f2d95c';
+    ctx.beginPath(); ctx.arc(-20, -30, 7, 0, Math.PI * 2); ctx.fill();
+    ctx.fillStyle = '#2a9a3a';
+    ctx.beginPath(); ctx.ellipse(-14, -36, 6, 3, 0.4, 0, Math.PI * 2); ctx.fill();
+  } else {
+    ctx.fillStyle = '#a85a2a';
+    ctx.beginPath(); ctx.arc(-20, -28, 5, 0, Math.PI * 2); ctx.fill();
+  }
+  ctx.restore();
+}
+
+// Dispatcher hidangan jadi.
+export function drawDish(ctx, dishId, cx, cy, sc, time) {
+  if (dishId === 'nasgor') drawNasgorDish(ctx, cx, cy, sc, time);
+  else if (dishId === 'spaghetti') drawSpaghettiDish(ctx, cx, cy, sc, time);
+  else if (dishId === 'miegoreng') drawMieGorengDish(ctx, cx, cy, sc, time);
+  else if (dishId === 'burger') drawBurgerDish(ctx, cx, cy, sc, time);
+  else if (dishId === 'esteh') drawDrinkDish(ctx, cx, cy, sc, time, 'esteh');
+  else if (dishId === 'strawsquash') drawDrinkDish(ctx, cx, cy, sc, time, 'strawsquash');
+  else if (dishId === 'lemonsquash') drawDrinkDish(ctx, cx, cy, sc, time, 'lemonsquash');
+}
+
+// ---- Panel stasiun (talenan / kompor) ----
+function drawStation(ctx, s, name, box) {
+  const st = STATIONS[name];
+  const lv = s.upg ? s.upg[name] : 0;
+  const isKompor = name === 'kompor';
+  ctx.fillStyle = isKompor ? '#3a3a3a' : '#f2e2c8';
+  rr(ctx, box.x, box.y, box.w, box.h, 12); ctx.fill();
+  ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2; ctx.stroke();
+  const labelColor = isKompor ? '#fff' : '#5a3a1e';
+  text(ctx, st.name, box.x + box.w / 2, box.y + 30, 'bold 22px sans-serif', labelColor, 'center');
+  // v19 S1: badge level upgrade.
+  text(ctx, 'Lv' + lv + ' ⚡', box.x + box.w - 14, box.y + 30, 'bold 15px sans-serif', lv > 0 ? '#ffd700' : (isKompor ? '#999' : '#a08a68'), 'right');
+  const item = s.stations[name];
+  const cx = box.x + box.w / 2;
+  const cy = box.y + 120;
+  if (item) {
+    // Item sedang diolah + progress.
+    drawIngredientIcon(ctx, item.item, cx, cy - 10, 30);
+    const frac = item.total > 0 ? item.t / item.total : 0;
+    ctx.fillStyle = 'rgba(0,0,0,0.2)';
+    rr(ctx, box.x + 24, box.y + 168, box.w - 48, 14, 7); ctx.fill();
+    ctx.fillStyle = '#ffd94d';
+    rr(ctx, box.x + 24, box.y + 168, (box.w - 48) * Math.min(1, frac), 14, 7); ctx.fill();
+    text(ctx, INGREDIENTS[item.item].label + ' diolah…', cx, box.y + 204, '16px sans-serif', labelColor, 'center');
+  } else {
+    // Kosong: gambar alat stasiun.
+    if (isKompor) {
+      ctx.fillStyle = '#555';
+      ctx.beginPath(); ctx.arc(cx - 34, cy, 34, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 34, cy, 34, 0, Math.PI * 2); ctx.fill();
+      ctx.fillStyle = '#ff8a3a';
+      ctx.beginPath(); ctx.arc(cx - 34, cy, 12, 0, Math.PI * 2); ctx.fill();
+      ctx.beginPath(); ctx.arc(cx + 34, cy, 12, 0, Math.PI * 2); ctx.fill();
+    } else {
+      ctx.fillStyle = '#d8b96a';
+      rr(ctx, cx - 70, cy - 40, 140, 80, 8); ctx.fill();
+      ctx.strokeStyle = '#a8763e'; ctx.lineWidth = 2;
+      for (let i = 0; i < 3; i++) {
+        ctx.beginPath(); ctx.moveTo(cx - 56, cy - 20 + i * 20); ctx.lineTo(cx + 56, cy - 20 + i * 20); ctx.stroke();
+      }
+      ctx.strokeStyle = '#cfd8dc'; ctx.lineWidth = 5; ctx.lineCap = 'round';
+      ctx.beginPath(); ctx.moveTo(cx + 60, cy - 46); ctx.lineTo(cx + 86, cy + 10); ctx.stroke();
+    }
+    text(ctx, 'Kosong — klik bahan dulu', cx, box.y + 204, '16px sans-serif', labelColor, 'center');
+  }
+}
+
+// ---- Panel piring ----
+function drawPlate(ctx, s, L) {
+  const box = L.piring;
+  // v18 C4: kilau emas bila kombo >= 3 (alpha min 0.4 agar selalu terlihat).
+  ctx.fillStyle = '#fff8ea';
+  rr(ctx, box.x, box.y, box.w, box.h, 12); ctx.fill();
+  ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2; ctx.stroke();
   if (s.combo >= RULES.comboGlowAt) {
     const glow = 0.7 + 0.3 * Math.sin(s.time * 4);
     ctx.strokeStyle = 'rgba(255,215,0,' + glow.toFixed(3) + ')';
-    ctx.lineWidth = 3;
-    rr(ctx, L.piring.x - 3, L.piring.y - 3, L.piring.w + 6, L.piring.h + 6, 14);
-    ctx.stroke();
-  }
-  ctx.fillStyle = '#5a2c12';
-  ctx.font = 'bold 22px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('PIRING', L.plateCenter.x, L.piring.y + 28);
-  drawPlateBase(ctx, L.plateCenter.x, L.plateCenter.y - 8, 1);
-  drawPlateContents(ctx, s, L.plateCenter.x, L.plateCenter.y - 8);
-
-  // Bar pesan + tombol SAJIKAN — hanya saat layar utama.
-  if (s.screen === 'main') {
-    ctx.fillStyle = '#fff3d6';
-    rr(ctx, L.pesan.x, L.pesan.y, L.pesan.w, L.pesan.h, 10);
-    ctx.fill();
-    ctx.strokeStyle = '#e8d5a8';
+    ctx.lineWidth = 5;
+    rr(ctx, box.x + 2, box.y + 2, box.w - 4, box.h - 4, 10); ctx.stroke();
     ctx.lineWidth = 2;
-    rr(ctx, L.pesan.x, L.pesan.y, L.pesan.w, L.pesan.h, 10);
-    ctx.stroke();
-    ctx.fillStyle = '#5a2c12';
-    ctx.font = '20px system-ui, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText(s.message || '', L.pesan.x + 16, L.pesan.y + 30);
-    // Tombol SAJIKAN.
-    const canServe = s.plate.length > 0;
-    ctx.fillStyle = canServe ? '#2a8a3a' : '#9a9a9a';
-    rr(ctx, L.sajikan.x, L.sajikan.y, L.sajikan.w, L.sajikan.h, 10);
-    ctx.fill();
-    ctx.fillStyle = '#fff';
-    ctx.font = 'bold 24px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('SAJIKAN (Spasi)', L.sajikan.x + L.sajikan.w / 2, L.sajikan.y + 32);
-    // Float text (+Rp …) + "SEMPURNA!" emas di atas tombol.
-    if (s.floatText) {
-      ctx.fillStyle = '#2a8a3a';
-      ctx.font = 'bold 28px system-ui, sans-serif';
-      ctx.fillText(s.floatText.text, L.sajikan.x + L.sajikan.w / 2, L.sajikan.y - 8);
-    }
-    if (s.perfect) {
-      ctx.fillStyle = '#ffd700';
-      ctx.font = 'bold 30px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      shadow(ctx, 'rgba(0,0,0,0.3)', 4, 0, 2);
-      ctx.fillText(s.perfect.text, L.sajikan.x + L.sajikan.w / 2, L.sajikan.y - 40);
-      noShadow(ctx);
+  }
+  // v19 S4: topi koki kecil di sudut panel.
+  ctx.save();
+  ctx.translate(box.x + 26, box.y + 22);
+  ctx.scale(0.32, 0.32);
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.arc(-14, -20, 11, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(0, -24, 12, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.arc(14, -20, 11, 0, Math.PI * 2); ctx.fill();
+  rr(ctx, -22, -26, 44, 12, 5); ctx.fill();
+  ctx.restore();
+  text(ctx, 'PIRING', box.x + box.w / 2, box.y + 30, 'bold 22px sans-serif', '#5a3a1e', 'center');
+  const pc = L.plateCenter;
+  if (s.plate.length === 0) {
+    // Piring kosong.
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.ellipse(pc.x, pc.y, 70, 24, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2; ctx.stroke();
+    text(ctx, 'Klik piring untuk taruh bahan', pc.x, pc.y + 52, '15px sans-serif', '#a08a68', 'center');
+    return;
+  }
+  // Cek apakah piring cocok dengan satu order -> gambar hidangan jadi.
+  let matchedDish = null;
+  for (const o of s.orders) {
+    const req = requiredIngredients(o);
+    if (req.length === s.plate.length && req.every((id) => s.plate.includes(id))) {
+      matchedDish = o.paket ? o.paket[0] : o.dish;
+      break;
     }
   }
-
-  // Kartu bahan di meja (v15: 18 kartu, 2 baris x 9) — grid yang sama
-  // dengan input.js via counterCardRect (pelajaran v15).
-  COUNTER.forEach((id, i) => {
-    const card = counterCardRect(L, i);
-    const x = card.x;
-    const y = card.y;
-    const cw = card.w;
-    ctx.fillStyle = '#fff8ea';
-    rr(ctx, x, y, cw, card.h, 8);
-    ctx.fill();
-    ctx.strokeStyle = s.hand === id ? '#d94f3d' : '#d8c9a8';
-    ctx.lineWidth = s.hand === id ? 3 : 2;
-    rr(ctx, x, y, cw, card.h, 8);
-    ctx.stroke();
-    // Ikon bahan + label + stasiun + tombol.
-    DRAW_ING[id](ctx, x + cw / 2, y + 38, 0.55);
-    ctx.fillStyle = '#5a2c12';
-    ctx.font = 'bold 15px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText(INGREDIENTS[id].label, x + cw / 2, y + 72);
-    ctx.fillStyle = '#7a5a3a';
-    ctx.font = '12px system-ui, sans-serif';
-    const st = INGREDIENTS[id].station;
-    ctx.fillText(st === 'siap' ? 'Siap pakai' : 'Olah: ' + (st === 'talenan' ? 'Talenan' : 'Kompor'), x + cw / 2, y + 90);
-    ctx.fillStyle = '#9a9a9a';
-    ctx.font = '11px system-ui, sans-serif';
-    ctx.fillText('[' + KEY_LABELS[i] + ']', x + cw / 2, y + 106);
-  });
-
-  // Footer: petunjuk.
-  ctx.fillStyle = 'rgba(90,44,18,0.08)';
-  rr(ctx, L.footer.x, L.footer.y, L.footer.w, L.footer.h, 10);
-  ctx.fill();
-  ctx.fillStyle = '#5a2c12';
-  ctx.font = '18px system-ui, sans-serif';
-  ctx.textAlign = 'left';
-  ctx.fillText('Klik bahan (1–9, A–L) → olah di Talenan (2 dtk) / Kompor (3,2 dtk) → klik Piring → SAJIKAN.', L.footer.x + 16, L.footer.y + 32);
-  ctx.fillText('Bahan "Siap pakai" langsung ke piring. Sajikan cepat = tip lebih besar. Kombo menaikkan bonus koin.', L.footer.x + 16, L.footer.y + 60);
-  ctx.fillText('Sajikan dengan kesabaran >75% = SEMPURNA! (+Rp 3).  P: jeda  •  R: ulang hari  •  Klik tiket untuk sajikan.', L.footer.x + 16, L.footer.y + 84);
-
-  // Papan pesanan (kanan).
-  renderBoard(ctx, s, L);
-}
-
-function renderStation(ctx, s, name, box) {
-  ctx.fillStyle = name === 'talenan' ? '#e8c9a0' : '#3a3a3a';
-  rr(ctx, box.x, box.y, box.w, box.h, 12);
-  ctx.fill();
-  ctx.strokeStyle = '#c8a878';
-  ctx.lineWidth = 2;
-  rr(ctx, box.x, box.y, box.w, box.h, 12);
-  ctx.stroke();
-  ctx.fillStyle = name === 'talenan' ? '#5a2c12' : '#fff';
-  ctx.font = 'bold 22px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText(name === 'talenan' ? 'TALENAN' : 'KOMPOR', box.x + box.w / 2, box.y + 30);
-  const st = s.stations[name];
-  if (st) {
-    // Bahan sedang diolah + progress bar.
-    DRAW_ING[st.item](ctx, box.x + box.w / 2, box.y + 105, 1);
-    const frac = Math.min(1, st.t / st.total);
-    ctx.fillStyle = 'rgba(0,0,0,0.2)';
-    rr(ctx, box.x + 20, box.y + 170, box.w - 40, 16, 8);
-    ctx.fill();
-    ctx.fillStyle = frac >= 1 ? '#2a8a3a' : '#f2c94c';
-    rr(ctx, box.x + 20, box.y + 170, (box.w - 40) * frac, 16, 8);
-    ctx.fill();
-    ctx.fillStyle = name === 'talenan' ? '#5a2c12' : '#fff';
-    ctx.font = '18px system-ui, sans-serif';
-    ctx.fillText(frac >= 1 ? 'SELESAI — klik untuk ambil' : INGREDIENTS[st.item].label + ' diolah…', box.x + box.w / 2, box.y + 205);
+  if (matchedDish) {
+    drawDish(ctx, matchedDish, pc.x, pc.y, 0.85, s.time);
   } else {
-    ctx.fillStyle = name === 'talenan' ? '#7a5a3a' : '#bbb';
-    ctx.font = '18px system-ui, sans-serif';
-    if (name === 'talenan') {
-      // Gambar talenan kayu + pisau.
-      ctx.fillStyle = '#d8a86a';
-      rr(ctx, box.x + 60, box.y + 70, box.w - 120, 90, 10);
-      ctx.fill();
-      ctx.strokeStyle = '#b88a4a';
-      ctx.lineWidth = 2;
-      for (let i = 0; i < 3; i++) {
-        ctx.beginPath();
-        ctx.moveTo(box.x + 80, box.y + 90 + i * 22);
-        ctx.lineTo(box.x + box.w - 80, box.y + 90 + i * 22);
-        ctx.stroke();
-      }
-      ctx.fillStyle = '#c0c0c0';
-      ctx.save();
-      ctx.translate(box.x + box.w - 50, box.y + 60);
-      ctx.rotate(0.6);
-      rr(ctx, -6, -30, 12, 60, 4);
-      ctx.fill();
-      ctx.restore();
-    } else {
-      // Gambar kompor: 2 tungku + api.
-      for (const dx of [-50, 50]) {
-        ctx.fillStyle = '#222';
-        circle(ctx, box.x + box.w / 2 + dx, box.y + 115, 42);
-        ctx.fill();
-        ctx.fillStyle = '#555';
-        circle(ctx, box.x + box.w / 2 + dx, box.y + 115, 32);
-        ctx.fill();
-        ctx.fillStyle = '#ff8c42';
-        ctx.beginPath();
-        ctx.moveTo(box.x + box.w / 2 + dx - 14, box.y + 118);
-        ctx.quadraticCurveTo(box.x + box.w / 2 + dx, box.y + 92, box.x + box.w / 2 + dx + 14, box.y + 118);
-        ctx.closePath();
-        ctx.fill();
-        ctx.fillStyle = '#ffd700';
-        ctx.beginPath();
-        ctx.moveTo(box.x + box.w / 2 + dx - 7, box.y + 118);
-        ctx.quadraticCurveTo(box.x + box.w / 2 + dx, box.y + 102, box.x + box.w / 2 + dx + 7, box.y + 118);
-        ctx.closePath();
-        ctx.fill();
-      }
+    // Bahan lepas: grid kecil (maks 8, 2 baris x 4) — v19 muat paket.
+    ctx.fillStyle = '#ffffff';
+    ctx.beginPath(); ctx.ellipse(pc.x, pc.y, 70, 24, 0, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2; ctx.stroke();
+    const n = s.plate.length;
+    const cols = Math.min(4, n);
+    const rows = Math.ceil(n / 4);
+    const gapX = 34, gapY = 30;
+    const startX = pc.x - ((cols - 1) * gapX) / 2;
+    const startY = pc.y - ((rows - 1) * gapY) / 2 - 4;
+    for (let i = 0; i < n; i++) {
+      const col = i % 4;
+      const row = Math.floor(i / 4);
+      drawIngredientIcon(ctx, s.plate[i], startX + col * gapX, startY + row * gapY, 13);
     }
-    ctx.fillStyle = name === 'talenan' ? '#7a5a3a' : '#bbb';
-    ctx.fillText('Kosong — klik bahan dulu', box.x + box.w / 2, box.y + 205);
+  }
+  // SEMPURNA! + float +Rp.
+  if (s.perfect) {
+    text(ctx, 'SEMPURNA!', pc.x, box.y + 168, 'bold 26px sans-serif', '#ffd700', 'center');
+  }
+  if (s.floatText) {
+    ctx.globalAlpha = Math.min(1, s.floatText.t / 0.6);
+    text(ctx, s.floatText.text, pc.x, box.y + 196, 'bold 22px sans-serif', '#2a9a3a', 'center');
+    ctx.globalAlpha = 1;
   }
 }
 
-function renderBoard(ctx, s, L) {
-  // Papan pesanan.
-  ctx.fillStyle = '#5a2c12';
-  rr(ctx, L.papan.x, L.papan.y, L.papan.w, L.papan.h, 14);
-  ctx.fill();
-  ctx.fillStyle = '#ffd700';
-  ctx.font = 'bold 24px system-ui, sans-serif';
-  ctx.textAlign = 'center';
-  ctx.fillText('PESANAN', L.papan.x + L.papan.w / 2, L.papan.y + 36);
-  // Tiket (maks 3).
-  s.orders.forEach((order, i) => {
-    const t = {
-      x: L.tiket.x,
-      y: L.tiket.y + i * (L.tiket.h + L.tiket.gap),
-      w: L.tiket.w,
-      h: L.tiket.h,
-    };
+// ---- Area pesan + tombol SAJIKAN ----
+function drawMessage(ctx, s, L) {
+  const box = L.pesan;
+  ctx.fillStyle = '#fff3d0';
+  rr(ctx, box.x, box.y, box.w, box.h, 10); ctx.fill();
+  ctx.strokeStyle = '#e8d8a8'; ctx.lineWidth = 1.5; ctx.stroke();
+  text(ctx, s.message, box.x + 16, box.y + 20, '17px sans-serif', '#5a3a1e');
+  // v19 S3: rincian bayaran (baris ke-2, kecil).
+  if (s.breakdown && s.messageT > 0) {
+    text(ctx, s.breakdown, box.x + 16, box.y + 40, '13px sans-serif', '#8a6a3a');
+  }
+}
+
+function drawServeButton(ctx, s, L) {
+  const box = L.sajikan;
+  const canServe = s.plate.length > 0;
+  ctx.fillStyle = canServe ? '#2a9a3a' : '#8aa88a';
+  rr(ctx, box.x, box.y, box.w, box.h, 10); ctx.fill();
+  text(ctx, 'SAJIKAN (Spasi)', box.x + box.w / 2, box.y + 32, 'bold 22px sans-serif', '#fff', 'center');
+}
+
+// ---- Counter 18 kartu ----
+function drawCounter(ctx, s, L) {
+  for (let i = 0; i < COUNTER.length; i++) {
+    const card = counterCardRect(L, i);
+    const id = COUNTER[i];
+    const ing = INGREDIENTS[id];
+    const inHand = s.hand === id;
+    const onPlate = s.plate.includes(id);
+    ctx.fillStyle = inHand ? '#ffe9b0' : '#fff8ea';
+    rr(ctx, card.x, card.y, card.w, card.h, 8); ctx.fill();
+    ctx.strokeStyle = inHand ? '#e2574c' : '#d8cfb8';
+    ctx.lineWidth = inHand ? 3 : 1.5; ctx.stroke();
+    drawIngredientIcon(ctx, id, card.x + card.w / 2, card.y + 34, 20);
+    text(ctx, ing.label, card.x + card.w / 2, card.y + 66, 'bold 14px sans-serif', '#5a3a1e', 'center');
+    const stLabel = ing.station === 'siap' ? 'Siap pakai' : ('Olah: ' + STATIONS[ing.station].name);
+    text(ctx, stLabel, card.x + card.w / 2, card.y + 84, '12px sans-serif', '#8a6a3a', 'center');
+    text(ctx, '[' + KEY_LABELS[i] + ']', card.x + card.w / 2, card.y + 100, '12px sans-serif', '#a08a68', 'center');
+    if (onPlate) {
+      ctx.fillStyle = '#2a9a3a';
+      ctx.beginPath(); ctx.arc(card.x + card.w - 14, card.y + 14, 9, 0, Math.PI * 2); ctx.fill();
+      ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
+      ctx.beginPath(); ctx.moveTo(card.x + card.w - 18, card.y + 14); ctx.lineTo(card.x + card.w - 15, card.y + 18); ctx.lineTo(card.x + card.w - 9, card.y + 9); ctx.stroke();
+    }
+  }
+}
+
+// ---- Footer: toko upgrade (v19 S1) + instruksi ----
+function drawFooter(ctx, s, L) {
+  const box = L.footer;
+  ctx.fillStyle = '#f7ecd4';
+  rr(ctx, box.x, box.y, box.w, box.h, 10); ctx.fill();
+  ctx.strokeStyle = '#e8d8a8'; ctx.lineWidth = 1.5; ctx.stroke();
+  text(ctx, '⚡ UPGRADE STASIUN — pakai koin untuk masak lebih cepat:', box.x + 12, box.y + 16, 'bold 13px sans-serif', '#5a3a1e');
+  for (const name of ['talenan', 'kompor']) {
+    const b = L.tombolUpgrade[name];
+    const lv = s.upg[name];
+    const maxed = lv >= UPGRADE_MAX;
+    const cost = maxed ? 0 : UPGRADE_COSTS[name][lv];
+    const afford = !maxed && s.coins >= cost;
+    ctx.fillStyle = maxed ? '#d8d0c0' : afford ? '#ffd94d' : '#e8e0d0';
+    rr(ctx, b.x, b.y, b.w, b.h, 8); ctx.fill();
+    ctx.strokeStyle = maxed ? '#b8b0a0' : afford ? '#c98a3a' : '#c8b898';
+    ctx.lineWidth = 2; ctx.stroke();
+    const nextTime = maxed ? UPGRADE_TIMES[name][lv] : UPGRADE_TIMES[name][lv + 1];
+    const label = STATIONS[name].name + ' Lv' + lv + ' → ' + nextTime + ' dtk' + (maxed ? ' — MAX' : ' — Rp ' + cost);
+    text(ctx, label, b.x + b.w / 2, b.y + 26, 'bold 15px sans-serif', maxed ? '#8a8070' : '#5a3a1e', 'center');
+  }
+  text(ctx, 'Klik / 1-9, A-L: ambil bahan • Spasi: sajikan • R: ulang • P: jeda • Sajikan 12 pesanan.', box.x + 12, box.y + 88, '12px sans-serif', '#8a6a3a');
+}
+
+// ---- Papan pesanan (tiket) ----
+function drawTicket(ctx, s, order, idx, L) {
+  const t = {
+    x: L.tiket.x,
+    y: L.tiket.y + idx * (L.tiket.h + L.tiket.gap),
+    w: L.tiket.w,
+    h: L.tiket.h,
+  };
+  const urgent = order.patience < RULES.urgentSeconds;
+  const isPaket = !!order.paket;
+  // Latar tiket.
+  ctx.fillStyle = order.vip ? '#fff6d6' : '#fff8ea';
+  rr(ctx, t.x, t.y, t.w, t.h, 10); ctx.fill();
+  // Border: VIP emas tebal; urgent denyut merah; normal cokelat.
+  if (order.vip) {
+    ctx.strokeStyle = '#ffd700'; ctx.lineWidth = 3;
+  } else if (urgent) {
+    const pulse = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(s.time * 6));
+    ctx.strokeStyle = 'rgba(226,57,57,' + pulse.toFixed(3) + ')'; ctx.lineWidth = 3;
+  } else {
+    ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2;
+  }
+  rr(ctx, t.x, t.y, t.w, t.h, 10); ctx.stroke();
+  ctx.lineWidth = 2;
+  // v19 S6: kilau fresh — order baru berdenyut emas + sparkle di sudut.
+  if (order.freshT > 0) {
+    const fa = 0.5 + 0.5 * Math.sin(s.time * 8);
+    ctx.strokeStyle = 'rgba(255,215,0,' + fa.toFixed(3) + ')';
+    ctx.lineWidth = 4;
+    rr(ctx, t.x + 2, t.y + 2, t.w - 4, t.h - 4, 8); ctx.stroke();
+    ctx.lineWidth = 2;
+    ctx.fillStyle = 'rgba(255,215,0,' + fa.toFixed(3) + ')';
+    for (const [sx, sy] of [[t.x + 14, t.y + 12], [t.x + t.w - 14, t.y + 12], [t.x + t.w / 2, t.y + 8]]) {
+      drawStar(ctx, sx, sy, 6, s.time * 2);
+    }
+  }
+  const price = orderPrice(order);
+  if (isPaket) {
+    // --- Tiket PAKET: 2 hidangan ---
+    // Pil PAKET + harga.
+    ctx.fillStyle = '#7a4a9a';
+    rr(ctx, t.x + 12, t.y + 10, 62, 20, 10); ctx.fill();
+    text(ctx, 'PAKET', t.x + 43, t.y + 25, 'bold 12px sans-serif', '#fff', 'center');
+    text(ctx, 'Rp ' + price, t.x + t.w - 12, t.y + 28, 'bold 18px sans-serif', '#2a9a3a', 'right');
+    const dA = DISHES[order.paket[0]];
+    const dB = DISHES[order.paket[1]];
+    text(ctx, (order.vip ? '★ ' : '') + dA.label, t.x + 12, t.y + 52, 'bold 16px sans-serif', '#5a3a1e');
+    text(ctx, '+ ' + dB.label, t.x + 12, t.y + 72, 'bold 16px sans-serif', '#5a3a1e');
+    // Dua preview berdampingan.
+    drawDish(ctx, order.paket[0], t.x + 52, t.y + 108, 0.26, s.time);
+    drawDish(ctx, order.paket[1], t.x + 150, t.y + 108, 0.26, s.time);
+    // Ikon bahan gabungan (union), 1 baris maks 8.
+    const req = requiredIngredients(order);
+    const iconW = 36;
+    const startX = t.x + 16;
+    for (let i = 0; i < req.length; i++) {
+      const ix = startX + i * iconW + 14;
+      const iy = t.y + 140;
+      drawIngredientIcon(ctx, req[i], ix, iy, 13);
+      if (s.plate.includes(req[i])) {
+        ctx.fillStyle = '#2a9a3a';
+        ctx.beginPath(); ctx.arc(ix + 10, iy - 10, 6, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2;
+        ctx.beginPath(); ctx.moveTo(ix + 6, iy - 10); ctx.lineTo(ix + 9, iy - 6); ctx.lineTo(ix + 14, iy - 13); ctx.stroke();
+      }
+    }
+  } else {
+    // --- Tiket biasa: 1 hidangan ---
     const dish = DISHES[order.dish];
-    const frac = Math.max(0, order.patience / order.max);
-    const isVip = !!order.vip;
-    const isUrgent = order.patience < RULES.urgentSeconds;
-    // Latar tiket: emas bila VIP (v17 S1), krem biasa bila bukan.
-    ctx.fillStyle = isVip ? '#fff6d6' : '#fff8ea';
-    rr(ctx, t.x, t.y, t.w, t.h, 10);
-    ctx.fill();
-    // Border: emas tebal bila VIP; merah tebal bila kesabaran <30%; krem biasa.
-    ctx.strokeStyle = isVip ? '#f2c14e' : (frac < 0.3 ? '#d94f3d' : '#d8c9a8');
-    ctx.lineWidth = isVip ? 3 : (frac < 0.3 ? 4 : 2);
-    rr(ctx, t.x, t.y, t.w, t.h, 10);
-    ctx.stroke();
-    // v17 S2: cahaya merah BERDENYUT di luar tiket bila kesabaran <10 dtk.
-    if (isUrgent) {
-      const pulse = 0.45 + 0.55 * (0.5 + 0.5 * Math.sin(s.time * 6));
-      ctx.strokeStyle = 'rgba(217,79,61,' + pulse.toFixed(3) + ')';
-      ctx.lineWidth = 3;
-      rr(ctx, t.x - 3, t.y - 3, t.w + 6, t.h + 6, 12);
-      ctx.stroke();
-    }
-    // Nama hidangan + harga. VIP: bintang emas "★" di depan nama (v17 S1).
-    ctx.textAlign = 'left';
-    ctx.font = 'bold 22px system-ui, sans-serif';
-    let nameX = t.x + 16;
-    if (isVip) {
-      ctx.fillStyle = '#d89a1e';
-      ctx.fillText('★', nameX, t.y + 32);
-      nameX += 26;
-    }
-    ctx.fillStyle = '#5a2c12';
-    ctx.fillText(dish.label, nameX, t.y + 32);
-    ctx.fillStyle = '#2a8a3a';
-    ctx.font = 'bold 20px system-ui, sans-serif';
-    ctx.textAlign = 'right';
-    // Harga tiket = orderPrice (2x bila VIP, +2 bila SPESIAL) — v17 S1, v18 C3.
-    ctx.fillText('Rp ' + orderPrice(order), t.x + t.w - 16, t.y + 32);
-    // v17 S4: gambar hidangan JADI di kiri baris tengah tiket
-    // (preview — pemain melihat hasil masakannya saat memasak).
-    DRAW_DISH[order.dish](ctx, t.x + 48, t.y + 92, 0.38, s.time);
-    // Ikon bahan (≤4 ikon sebaris) — bergeser ke kanan karena ada preview.
+    text(ctx, (order.vip ? '★ ' : '') + dish.label, t.x + 12, t.y + 28, 'bold 18px sans-serif', '#5a3a1e');
+    text(ctx, 'Rp ' + price, t.x + t.w - 12, t.y + 28, 'bold 18px sans-serif', '#2a9a3a', 'right');
+    // Preview hidangan jadi di kiri + ikon bahan bergeser kanan.
+    drawDish(ctx, order.dish, t.x + 44, t.y + 96, 0.38, s.time);
     const iconW = 52;
-    const startX = t.x + 95;
-    dish.ingredients.forEach((id, j) => {
-      const ix = startX + j * iconW + 24;
-      DRAW_ING[id](ctx, ix, t.y + 92, 0.5);
-      // Ceklis bila bahan sudah di piring.
-      if (s.plate.includes(id)) {
-        ctx.strokeStyle = '#2a8a3a';
-        ctx.lineWidth = 4;
-        ctx.lineCap = 'round';
-        ctx.beginPath();
-        ctx.moveTo(ix - 10, t.y + 92);
-        ctx.lineTo(ix - 2, t.y + 100);
-        ctx.lineTo(ix + 12, t.y + 82);
-        ctx.stroke();
+    const startX = t.x + 92;
+    for (let i = 0; i < dish.ingredients.length; i++) {
+      const ix = startX + i * iconW + 20;
+      const iy = t.y + 96;
+      drawIngredientIcon(ctx, dish.ingredients[i], ix, iy, 16);
+      if (s.plate.includes(dish.ingredients[i])) {
+        ctx.fillStyle = '#2a9a3a';
+        ctx.beginPath(); ctx.arc(ix + 12, iy - 12, 8, 0, Math.PI * 2); ctx.fill();
+        ctx.strokeStyle = '#fff'; ctx.lineWidth = 2.5;
+        ctx.beginPath(); ctx.moveTo(ix + 7, iy - 12); ctx.lineTo(ix + 11, iy - 7); ctx.lineTo(ix + 17, iy - 16); ctx.stroke();
       }
-    });
-    // Bar kesabaran.
-    ctx.fillStyle = 'rgba(0,0,0,0.15)';
-    rr(ctx, t.x + 16, t.y + 148, t.w - 32, 14, 7);
-    ctx.fill();
-    ctx.fillStyle = frac > 0.5 ? '#2a8a3a' : frac > 0.3 ? '#f2c94c' : '#d94f3d';
-    rr(ctx, t.x + 16, t.y + 148, (t.w - 32) * frac, 14, 7);
-    ctx.fill();
-    // Teks kesabaran: merah + tebal bila urgent (v17 S2).
-    ctx.fillStyle = isUrgent ? '#d94f3d' : '#7a5a3a';
-    ctx.font = isUrgent ? 'bold 16px system-ui, sans-serif' : '16px system-ui, sans-serif';
-    ctx.textAlign = 'left';
-    ctx.fillText('Kesabaran: ' + Math.ceil(order.patience) + ' dtk', t.x + 16, t.y + 184);
-    // v18 C3: pil emas "SPESIAL" di kanan-bawah tiket bila order spesial.
-    if (order.special) {
-      ctx.fillStyle = '#f2c14e';
-      rr(ctx, t.x + t.w - 14 - 70, t.y + 164, 70, 18, 9);
-      ctx.fill();
-      ctx.fillStyle = '#5a2c12';
-      ctx.font = 'bold 11px system-ui, sans-serif';
-      ctx.textAlign = 'center';
-      ctx.fillText('SPESIAL', t.x + t.w - 14 - 35, t.y + 177);
     }
-  });
-  // Slot kosong.
-  for (let i = s.orders.length; i < RULES.ordersMax; i++) {
-    const t = {
-      x: L.tiket.x,
-      y: L.tiket.y + i * (L.tiket.h + L.tiket.gap),
-      w: L.tiket.w,
-      h: L.tiket.h,
-    };
-    ctx.fillStyle = 'rgba(255,255,255,0.08)';
-    rr(ctx, t.x, t.y, t.w, t.h, 10);
-    ctx.fill();
-    ctx.fillStyle = 'rgba(255,255,255,0.5)';
-    ctx.font = '18px system-ui, sans-serif';
-    ctx.textAlign = 'center';
-    ctx.fillText('Pesanan baru datang…', t.x + t.w / 2, t.y + t.h / 2 + 6);
+  }
+  // Bar kesabaran.
+  const frac = Math.max(0, order.patience / order.max);
+  const barY = t.y + 164;
+  ctx.fillStyle = 'rgba(0,0,0,0.15)';
+  rr(ctx, t.x + 12, barY, t.w - 24, 12, 6); ctx.fill();
+  ctx.fillStyle = frac > 0.5 ? '#3e9b4f' : frac > 0.25 ? '#e8a33a' : '#e2574c';
+  rr(ctx, t.x + 12, barY, (t.w - 24) * frac, 12, 6); ctx.fill();
+  // Teks kesabaran (merah tebal bila urgent).
+  if (urgent) {
+    text(ctx, 'Kesabaran: ' + Math.ceil(order.patience) + ' dtk', t.x + 12, t.y + 190, 'bold 14px sans-serif', '#e2574c');
+  } else {
+    text(ctx, 'Kesabaran: ' + Math.ceil(order.patience) + ' dtk', t.x + 12, t.y + 190, '14px sans-serif', '#8a6a3a');
+  }
+  // Pil SPESIAL (v18 C3).
+  if (order.special) {
+    ctx.fillStyle = '#ffd700';
+    rr(ctx, t.x + t.w - 84, t.y + 164, 70, 18, 9); ctx.fill();
+    text(ctx, 'SPESIAL', t.x + t.w - 49, t.y + 178, 'bold 11px sans-serif', '#5a3a1e', 'center');
   }
 }
 
-function renderEndCard(ctx, s) {
-  const c = LAYOUT.kartuAkhir;
-  ctx.fillStyle = 'rgba(0,0,0,0.45)';
+// Bintang 4-sisi (sparkle Cling).
+function drawStar(ctx, x, y, r, rot) {
+  ctx.save();
+  ctx.translate(x, y);
+  ctx.rotate(rot);
+  ctx.beginPath();
+  ctx.moveTo(0, -r); ctx.quadraticCurveTo(0, 0, r, 0); ctx.quadraticCurveTo(0, 0, 0, r);
+  ctx.quadraticCurveTo(0, 0, -r, 0); ctx.quadraticCurveTo(0, 0, 0, -r);
+  ctx.fill();
+  ctx.restore();
+}
+
+// v19 S3/S6: partikel koin + sparkle Cling (di atas panel).
+function drawFx(ctx, s) {
+  for (const p of s.coinFx) {
+    ctx.globalAlpha = Math.max(0, p.t / p.life);
+    ctx.fillStyle = '#ffd700';
+    ctx.beginPath(); ctx.arc(p.x, p.y, 5, 0, Math.PI * 2); ctx.fill();
+    ctx.strokeStyle = '#c98a3a'; ctx.lineWidth = 1.5; ctx.stroke();
+    ctx.fillStyle = '#c98a3a';
+    ctx.font = 'bold 7px sans-serif'; ctx.textAlign = 'center'; ctx.textBaseline = 'middle';
+    ctx.fillText('Rp', p.x, p.y);
+  }
+  ctx.globalAlpha = 1;
+  for (const p of s.sparkles) {
+    ctx.globalAlpha = Math.max(0, p.t / p.life);
+    ctx.fillStyle = '#ffd700';
+    drawStar(ctx, p.x, p.y, p.r, p.rot);
+    ctx.fillStyle = '#ffffff';
+    drawStar(ctx, p.x, p.y, p.r * 0.5, -p.rot);
+  }
+  ctx.globalAlpha = 1;
+}
+
+// ---- Layar judul ----
+function drawTitle(ctx, s, L) {
+  drawBackground(ctx, s);
+  // Jendela (langit + matahari + awan) di latar judul.
+  ctx.fillStyle = '#bfe8ff';
+  rr(ctx, 60, 60, 220, 140, 10); ctx.fill();
+  ctx.strokeStyle = '#a8763e'; ctx.lineWidth = 4; ctx.stroke();
+  ctx.fillStyle = '#ffd94d';
+  ctx.beginPath(); ctx.arc(120, 110, 24, 0, Math.PI * 2); ctx.fill();
+  ctx.fillStyle = '#ffffff';
+  ctx.beginPath(); ctx.ellipse(180, 100, 34, 12, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.beginPath(); ctx.ellipse(210, 130, 28, 10, 0, 0, Math.PI * 2); ctx.fill();
+  ctx.strokeStyle = '#a8763e'; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.moveTo(170, 60); ctx.lineTo(170, 200); ctx.stroke();
+  ctx.beginPath(); ctx.moveTo(60, 130); ctx.lineTo(280, 130); ctx.stroke();
+  // Koki besar di kiri bawah (di bawah label hero, di kiri tombol).
+  drawChef(ctx, 150, 470, 1.4, 'senyum');
+  text(ctx, 'DAPUR KILAT', 640, 150, 'bold 84px sans-serif', '#e2574c', 'center');
+  text(ctx, 'Masak cepat, sajikan tepat waktu!', 640, 200, 'bold 28px sans-serif', '#5a3a1e', 'center');
+  text(ctx, 'Ambil bahan, olah di talenan & kompor, rakit di piring, sajikan sebelum hangus.', 640, 238, '20px sans-serif', '#8a6a3a', 'center');
+  // Hero 7 hidangan.
+  const hero = ['nasgor', 'spaghetti', 'miegoreng', 'burger', 'esteh', 'strawsquash', 'lemonsquash'];
+  const labels = ['Nasi Goreng', 'Spaghetti Bolognese', 'Mie Goreng Spesial', 'Burger', 'Es Teh Manis', 'Strawberry Squash', 'Lemon Squash Mint'];
+  for (let i = 0; i < hero.length; i++) {
+    const hx = 100 + i * 155;
+    drawDish(ctx, hero[i], hx, 330, 0.5, s.time);
+    text(ctx, labels[i], hx, 400, 'bold 16px sans-serif', '#5a3a1e', 'center');
+  }
+  // Tombol mulai.
+  const b = L.tombolJudul;
+  ctx.fillStyle = '#e2574c';
+  rr(ctx, b.x, b.y, b.w, b.h, 14); ctx.fill();
+  text(ctx, 'MULAI MEMASAK', b.x + b.w / 2, b.y + 42, 'bold 28px sans-serif', '#fff', 'center');
+  text(ctx, 'Klik / tombol 1-9, A-L: ambil bahan • Spasi: sajikan • R: ulang • P: jeda', 640, 620, '18px sans-serif', '#5a3a1e', 'center');
+  text(ctx, 'Sajikan 12 pesanan untuk menyelesaikan hari. 3 pesanan hangus = shift berakhir.', 640, 650, '18px sans-serif', '#8a6a3a', 'center');
+}
+
+// ---- Layar akhir (menang / kalah) ----
+function drawEnd(ctx, s, L) {
+  drawBackground(ctx, s);
+  const win = s.screen === 'win';
+  const card = L.kartuAkhir;
+  ctx.fillStyle = 'rgba(0,0,0,0.25)';
   ctx.fillRect(0, 0, 1280, 720);
   ctx.fillStyle = '#fff8ea';
-  rr(ctx, c.x, c.y, c.w, c.h, 18);
-  ctx.fill();
-  ctx.strokeStyle = '#d8c9a8';
-  ctx.lineWidth = 3;
-  rr(ctx, c.x, c.y, c.w, c.h, 18);
-  ctx.stroke();
-  ctx.textAlign = 'center';
-  if (s.screen === 'win') {
-    ctx.fillStyle = '#2a8a3a';
-    ctx.font = 'bold 40px system-ui, sans-serif';
-    ctx.fillText('HARI SELESAI!', 640, c.y + 70);
-    ctx.fillStyle = '#5a2c12';
-    ctx.font = '24px system-ui, sans-serif';
-    ctx.fillText('Kamu menyajikan 12 pesanan. Kerja bagus, koki!', 640, c.y + 116);
-  } else {
-    ctx.fillStyle = '#d94f3d';
-    ctx.font = 'bold 40px system-ui, sans-serif';
-    ctx.fillText('SHIFT BERAKHIR', 640, c.y + 70);
-    ctx.fillStyle = '#5a2c12';
-    ctx.font = '24px system-ui, sans-serif';
-    ctx.fillText('3 pesanan hangus. Dapur tutup hari ini.', 640, c.y + 116);
+  rr(ctx, card.x, card.y, card.w, card.h, 16); ctx.fill();
+  ctx.strokeStyle = '#d8cfb8'; ctx.lineWidth = 2; ctx.stroke();
+  // Koki sesuai mood (lebih besar, mengisi kartu).
+  drawChef(ctx, card.x + card.w / 2, card.y + 70, 1.25, win ? 'rayakan' : 'sedih');
+  text(ctx, win ? 'HARI SELESAI!' : 'SHIFT BERAKHIR', card.x + card.w / 2, card.y + 170, 'bold 36px sans-serif', win ? '#2a9a3a' : '#e2574c', 'center');
+  text(ctx, win ? 'Kamu menyajikan 12 pesanan. Kerja bagus, koki!' : 'Tiga pesanan hangus. Coba lagi, koki!', card.x + card.w / 2, card.y + 205, '18px sans-serif', '#5a3a1e', 'center');
+  text(ctx, 'Total koin: Rp ' + s.coins, card.x + card.w / 2, card.y + 245, 'bold 26px sans-serif', '#5a3a1e', 'center');
+  text(ctx, 'Pesanan disajikan: ' + s.served + ' • Waktu: ' + Math.floor(s.time) + ' dtk', card.x + card.w / 2, card.y + 275, '18px sans-serif', '#8a6a3a', 'center');
+  ctx.fillStyle = '#e2574c';
+  rr(ctx, card.x + 130, card.y + 296, 300, 52, 12); ctx.fill();
+  text(ctx, 'MAIN LAGI (R)', card.x + card.w / 2, card.y + 330, 'bold 22px sans-serif', '#fff', 'center');
+}
+
+// ---- Render utama ----
+export function render(ctx, s) {
+  const L = LAYOUT;
+  ctx.clearRect(0, 0, 1280, 720);
+  if (s.screen === 'title') { drawTitle(ctx, s, L); return; }
+  if (s.screen === 'win' || s.screen === 'over') { drawEnd(ctx, s, L); return; }
+  // Layar main.
+  drawBackground(ctx, s);
+  drawHeader(ctx, s, L);
+  drawStation(ctx, s, 'talenan', L.talenan);
+  drawStation(ctx, s, 'kompor', L.kompor);
+  drawPlate(ctx, s, L);
+  drawMessage(ctx, s, L);
+  drawServeButton(ctx, s, L);
+  drawCounter(ctx, s, L);
+  drawFooter(ctx, s, L);
+  // Papan pesanan.
+  ctx.fillStyle = '#f7ecd4';
+  rr(ctx, L.papan.x, L.papan.y, L.papan.w, L.papan.h, 12); ctx.fill();
+  ctx.strokeStyle = '#e8d8a8'; ctx.lineWidth = 2; ctx.stroke();
+  text(ctx, 'PESANAN', L.papan.x + L.papan.w / 2, L.papan.y + 4, 'bold 18px sans-serif', '#5a3a1e', 'center');
+  for (let i = 0; i < s.orders.length; i++) {
+    drawTicket(ctx, s, s.orders[i], i, L);
   }
-  ctx.fillStyle = '#5a2c12';
-  ctx.font = 'bold 28px system-ui, sans-serif';
-  ctx.fillText('Total koin: Rp ' + s.coins, 640, c.y + 168);
-  ctx.font = '22px system-ui, sans-serif';
-  ctx.fillText('Pesanan disajikan: ' + s.served + '  •  Waktu: ' + Math.floor(s.time) + ' dtk', 640, c.y + 206);
-  ctx.fillStyle = '#d94f3d';
-  rr(ctx, 520, c.y + 240, 240, 52, 12);
-  ctx.fill();
-  ctx.fillStyle = '#fff';
-  ctx.font = 'bold 22px system-ui, sans-serif';
-  ctx.fillText('MAIN LAGI (R)', 640, c.y + 274);
+  // Efek di atas semua panel.
+  drawFx(ctx, s);
 }

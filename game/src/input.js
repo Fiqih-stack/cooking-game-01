@@ -1,12 +1,12 @@
-// Dapur Kilat v18 — input (mouse + keyboard).
+// Dapur Kilat v19 — input (mouse + keyboard).
 // Klik: bahan di meja (18 kartu, 2 baris x 9), stasiun, piring,
-// tombol SAJIKAN, tiket, tombol judul.
+// tombol SAJIKAN, tiket, tombol judul, tombol upgrade (v19 S1).
 // Tombol 1-9: baris 1 counter. Tombol A,S,D,F,G,H,J,K,L: baris 2 counter.
 // Spasi: sajikan. R: restart. P: jeda.
-// v18: tidak ada perubahan input (counter tetap 18, 7 hidangan).
+// v19: tidak ada perubahan counter (tetap 18, 7 hidangan).
 
 import { COUNTER, counterCardRect } from './config.js';
-import { pickIngredient, placeOnPlate, serve, startGame, useStation } from './state.js';
+import { buyUpgrade, pickIngredient, placeOnPlate, serve, startGame, useStation } from './state.js';
 
 // Tombol baris 2 counter (berurutan dengan COUNTER[9..17]).
 const ROW2_KEYS = ['a', 's', 'd', 'f', 'g', 'h', 'j', 'k', 'l'];
@@ -77,6 +77,9 @@ function handleClick(s, x, y, L) {
   }
   if (s.screen !== 'main' || s.paused) return;
 
+  // v19 S1: tombol upgrade stasiun di footer.
+  if (inside(x, y, L.tombolUpgrade.talenan)) { buyUpgrade(s, 'talenan'); return; }
+  if (inside(x, y, L.tombolUpgrade.kompor)) { buyUpgrade(s, 'kompor'); return; }
   // Tombol SAJIKAN.
   if (inside(x, y, L.sajikan)) { serve(s, -1); return; }
   // Stasiun.

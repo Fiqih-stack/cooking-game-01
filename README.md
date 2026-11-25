@@ -1,52 +1,61 @@
-[![make.fun · best-cooking-game-20261125-0137](https://make.fun/badge/best-cooking-game-20261125-0137.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
-[![rank](https://make.fun/badge/best-cooking-game-20261125-0137/Fiqih-stack/cooking-game-01/rank.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
-[![reward](https://make.fun/badge/best-cooking-game-20261125-0137/Fiqih-stack/cooking-game-01/reward.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
+# Dapur Kilat — v19
 
-# Dapur Kilat
-
-Game masak 2D yang cepat dan menegangkan: ambil bahan, olah di talenan dan kompor, rakit di piring, lalu sajikan sebelum pesanan hangus. Sajikan 12 pesanan untuk menyelesaikan hari — tiga pesanan hangus dan shift berakhir.
-
-## Menu
-
-- **Nasi Goreng Udang** (Rp 19) — nasi + telur + kecap + udang. Platting: gundukan nasi keemasan, telur di pinggir, udang di tepi, irisan tomat dan timun berlapis di sisi nasi.
-- **Spaghetti Bolognese** (Rp 17) — spaghetti + daging + saus tomat + keju
-- **Mie Goreng Spesial** (Rp 16) — spaghetti + telur + kecap + selada
-- **Burger** (Rp 18) — roti + patty + keju + selada, dengan kentang goreng sebagai pendamping
-- **Es Teh Manis** (Rp 11) — teh + es + gula
-- **Ice Strawberry Squash** (Rp 15) — stroberi + soda + es + gula
-- **Lemon Squash Mint** (Rp 14) — lemon + mint + soda + es
-
-## Pesanan VIP
-
-Sesekali muncul pesanan **VIP** bertiket emas (bintang ★ di tiket) — harganya **2× lipat**. Perhatikan tiket emas di papan pesanan dan prioritaskan: VIP yang disajikan cepat memberi koin jauh lebih besar.
-
-Setiap tiket juga menampilkan gambar hidangan jadinya, jadi kamu bisa melihat hasil masakanmu sambil memasak.
-
-## Jam Sibuk (RUSH!)
-
-Setiap 45 detik, dapur memasuki **Jam Sibuk** selama 12 detik: header jadi oranye, muncul tanda "⚡ RUSH!", pesanan baru datang lebih cepat, dan setiap sajian mendapat tip tambahan **+Rp 2**. Manfaatkan momen ini untuk mengejar koin sebanyak-banyaknya — tapi awas, pesanan juga lebih cepat hangus.
-
-## Menu Spesial Hari Ini
-
-Setiap hari, satu hidangan dipilih menjadi **Menu Spesial** (tiketnya berlabel emas "SPESIAL") — harganya **+Rp 2**. Prioritaskan hidangan spesial hari itu untuk koin ekstra. Kalau hidangan spesial itu juga VIP, harganya jadi (dasar + 2) × 2!
+Game memasak cepat: ambil bahan, olah di talenan & kompor, rakit di piring,
+sajikan sebelum pesanan hangus. Sajikan 12 pesanan untuk menyelesaikan hari.
+3 pesanan hangus = shift berakhir.
 
 ## Cara main
 
-1. Klik bahan di meja (atau tombol 1–9, A–L) untuk mengambilnya.
-2. Olah bahan mentah di **talenan** (potong, 2 dtk) atau **kompor** (masak, 3,2 dtk). Bahan "siap" langsung bisa ditaruh.
-3. Klik piring untuk menaruh bahan yang sudah diolah.
-4. Klik **SAJIKAN**, tekan Spasi, atau klik tiket pesanan untuk menyajikan hidangan yang lengkap.
-5. Sajikan cepat untuk dapat tip, jaga kombo untuk bonus koin (kombo x3 ke atas membuat piring berkilau emas), dan sajikan dengan kesabaran di atas 75% untuk bonus **SEMPURNA!** (+Rp 3). Hati-hati: tiket yang kesabarannya di bawah 10 detik berdenyut merah — segera sajikan sebelum hangus!
+- Klik kartu bahan (atau tombol 1-9, A-L) untuk mengambil bahan.
+- Bahan mentah diolah di Talenan (2 dtk) atau Kompor (3,2 dtk); bahan "Siap
+  pakai" langsung ke piring.
+- Klik stasiun untuk mulai olah / ambil hasil. Klik Piring untuk taruh bahan.
+- Klik SAJIKAN (atau Spasi) untuk menyajikan hidangan yang cocok.
+- Klik tiket pesanan untuk menyajikan tiket itu langsung.
+- R: ulang hari. P: jeda.
 
-## Kontrol
+## Fitur v19
 
-- **Klik** — ambil bahan, pakai stasiun, taruh di piring, sajikan
-- **1–9** — pilih bahan baris atas dari meja
-- **A–L** — pilih bahan baris bawah dari meja
-- **Spasi** — sajikan hidangan di piring
-- **R** — mulai hari dari awal
-- **P** — jeda / lanjut
+- **Toko Upgrade Stasiun** — pakai koin untuk percepat Talenan (2,0→1,4→1,0
+  dtk) dan Kompor (3,2→2,3→1,7 dtk). Tombol ada di footer.
+- **Pesanan Paket** — kadang satu tiket minta 2 hidangan sekaligus (bonus
+  Rp 5). Harga = jumlah dasar + bonus.
+- **Partikel koin + rincian bayaran** — koin terbang ke header saat saji;
+  rincian (dasar + tip + kombo + SEMPURNA!) tampil di bawah pesan.
+- **Koki + latar dapur hidup** — karakter koki di layar judul & akhir,
+  jendela dan rak toples di latar.
+- **RUSH tiap 30 detik** — jam sibuk: pesanan lebih cepat, tip +Rp 2.
+- **Efek Cling** — kilau bintang emas saat pesanan selesai; pesanan baru
+  berdenyut emas (fresh) selama 1,5 detik.
 
-Game berjalan offline di browser, tanpa aset luar — semua gambar digambar dengan kode canvas.
+## Fitur yang dipertahankan
+
+- 7 hidangan, 18 bahan. Pesanan VIP (tiket emas, bayar 2x). Menu Spesial
+  Hari Ini (+Rp 2, pil emas SPESIAL). Urgensi: tiket berdenyut merah bila
+  kesabaran < 10 dtk. Bonus SEMPURNA! (+Rp 3 bila kesabaran > 75%).
+  Kilau emas bila kombo >= 3. Preview hidangan jadi di setiap tiket.
+
+## Menu (7 hidangan)
+
+- Nasi Goreng Udang Rp 19 — nasi + telur + kecap + udang
+- Spaghetti Bolognese Rp 17 — spaghetti + daging + saus tomat + keju
+- Mie Goreng Spesial Rp 16 — spaghetti + telur + kecap + selada
+- Burger Rp 18 — roti + patty + keju + selada (+ kentang goreng visual)
+- Es Teh Manis Rp 11 — teh + es + gula
+- Ice Strawberry Squash Rp 15 — stroberi + soda + es + gula
+- Lemon Squash Mint Rp 14 — lemon + mint + soda + es
+
+## Teknologi
+
+- Canvas 2D, tanpa dependensi. Semua gambar digambar dengan kode.
+- `game/src/` — config, state, input, render, main, shots.
+- `main.ts` — entrypoint: menyalin game + screenshot ke /output dan
+  menulis dossier.json via `vendor/makefun-game.ts`.
+
+Dibuat untuk bounty make.fun "Make the best cooking game".
+
+[![make.fun · best-cooking-game-20261125-0137](https://make.fun/badge/best-cooking-game-20261125-0137.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
+[![rank](https://make.fun/badge/best-cooking-game-20261125-0137/Fiqih-stack/cooking-game-01/rank.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137/leaderboard?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
+[![reward](https://make.fun/badge/best-cooking-game-20261125-0137/Fiqih-stack/cooking-game-01/reward.svg)](https://make.fun/bounty/best-cooking-game-20261125-0137?utm_source=github&utm_medium=readme&utm_campaign=best-cooking-game-20261125-0137)
 
 Dibangun untuk bounty [Make the best cooking game](https://make.fun/bounty/best-cooking-game-20261125-0137) di make.fun. Coba buat game kamu sendiri di [make.fun](https://make.fun/?ref=6sc35azz).
